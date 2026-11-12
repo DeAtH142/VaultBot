@@ -1,26 +1,100 @@
-// src/utils/aiChatRunner.js — 🤖 AI Chat Runner (Groq + Gemini)
-// Seçili hesap belirli kanallarda insan gibi konuşur. Cevaplar Groq (öncelikli) veya Gemini'den gelir.
-// API key'ler HER KULLANICININ kendine ait — panelen girilir, AES ile şifreli saklanır.
+// src/utils/aiChatRunner.js — 🤖 AI Chat Runner (Groq + Gemini) v3
+// Seçili hesap belirli kanallarda insan gibi konuşur.
+// API key'ler HER KULLANICININ kendine ait — panelden girilir, AES ile şifreli saklanır.
+// Çalışan modeller otomatik keşfedilir ve data/ai-models.json'a kaydedilir.
+
 import { Client } from 'discord.js-selfbot-v13';
 import { decrypt } from './crypto.js';
 import { getToken } from './tokenStore.js';
 import { getUserKeys } from './aiKeyStore.js';
 import { readModuleJson, writeModuleJson } from './moduleStore.js';
+import fs from 'fs';
+import path from 'path';
 
 const FILE = 'ai_chats.json';
+const MODEL_FILE = path.resolve('data/ai-models.json');
+
 const sessions = new Map(); // `${userId}:${tokenIndex}` -> { client, config, memory: Map<channelId, string[]> }
 const MEMORY_LIMIT = 12;    // kanal başı son N mesaj hatırlanır (bağlam)
 
-// ── API sağlayıcılar ────────────────────────────────────────────────────
+// ── Model Deposu ────────────────────────────────────────────────────────
 
-async function askGroq(prompt, history, apiKey) {
+function loadModels() {
+  try { return JSON.parse(fs.readFileSync(MODEL_FILE, 'utf8')); }
+  catch { return { groq: [], gemini: [] }; }
+}
+function saveModels(data) {
+  fs.mkdirSync(path.dirname(MODEL_FILE), { recursive: true });
+  fs.writeFileSync(MODEL_FILE, JSON.stringify(data, null, 2));
+}
+
+export function getWorkingModels(provider) {
+  return loadModels()[provider] || [];
+}
+
+/**
+ * API key ile tüm modelleri test eder ve çalışanları data/ai-models.json'a kaydeder.
+ * Key kaydedildikten sonra çağrılmalıdır.
+ */
+export async function discoverAndSaveModels(userId, provider, apiKey) {
+  let modelIds = [];
+  try {
+    if (provider === 'groq') {
+      const res = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(`Groq modelleri alınamadı: ${res.status}`);
+      const json = await res.json();
+      modelIds = json.data.map(m => m.id);
+    } else if (provider === 'gemini') {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (!res.ok) throw new Error(`Gemini modelleri alınamadı: ${res.status}`);
+      const json = await res.json();
+      modelIds = json.models.map(m => m.name.replace('models/', ''));
+    }
+
+    const working = [];
+    for (const id of modelIds) {
+      try {
+        let testOk = false;
+        if (provider === 'groq') {
+          const test = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: id, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5 }),
+          });
+          testOk = test.ok;
+        } else if (provider === 'gemini') {
+          const test = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${id}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }] }),
+          });
+          testOk = test.ok;
+        }
+        if (testOk) working.push(id);
+      } catch (e) { /* bu model çalışmıyor, geç */ }
+    }
+
+    const store = loadModels();
+    store[provider] = working;
+    saveModels(store);
+    return { success: true, working, total: modelIds.length };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ── API Sağlayıcılar ────────────────────────────────────────────────────
+
+async function askGroq(prompt, history, apiKey, model) {
   const key = apiKey || process.env.GROQ_API_KEY;
   if (!key) throw new Error('Groq API key bulunamadı! `!aichat` panelinden ekleyin.');
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      model: process.env.GROQ_MODEL || 'llama-3.1-8b-instant',
+      model: model || 'llama-3.1-8b-instant',
       messages: history,
       max_tokens: 180,
       temperature: 0.9,
@@ -32,15 +106,15 @@ async function askGroq(prompt, history, apiKey) {
   return data.choices?.[0]?.message?.content?.trim();
 }
 
-async function askGemini(prompt, history, apiKey) {
+async function askGemini(prompt, history, apiKey, model) {
   const key = apiKey || process.env.GEMINI_API_KEY;
   if (!key) throw new Error('Gemini API key bulunamadı! `!aichat` panelinden ekleyin.');
-  const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const mdl = model || 'gemini-3.5-flash-lite';
   const contents = history.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${key}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 180, temperature: 0.9 } }),
@@ -51,23 +125,51 @@ async function askGemini(prompt, history, apiKey) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 }
 
-/** Sırayla dener: önce Groq, başarısızsa Gemini (kullanıcının kendi key'leriyle) */
+/**
+ * Sırayla dener: önce çalışan Groq modelleri, sonra çalışan Gemini modelleri.
+ * Çalışan model yoksa varsayılan modele döner.
+ */
 export async function askAI(ownerId, prompt, history = []) {
   const userKeys = getUserKeys(ownerId);
   const providers = [];
-  if (userKeys.groq) providers.push(['groq', askGroq, userKeys.groq]);
-  if (userKeys.gemini) providers.push(['gemini', askGemini, userKeys.gemini]);
+
+  // 1. Çalışan modelleri al
+  const groqModels = getWorkingModels('groq');
+  const geminiModels = getWorkingModels('gemini');
+
+  // 2. Provider listesini oluştur
+  if (userKeys.groq) {
+    if (groqModels.length > 0) {
+      // Çalışan her Groq modelini sırayla dene
+      for (const model of groqModels) {
+        providers.push(['groq', askGroq, userKeys.groq, model]);
+      }
+    } else {
+      // Hiç çalışan model yoksa varsayılanı dene
+      providers.push(['groq', askGroq, userKeys.groq, 'llama-3.1-8b-instant']);
+    }
+  }
+  if (userKeys.gemini) {
+    if (geminiModels.length > 0) {
+      for (const model of geminiModels) {
+        providers.push(['gemini', askGemini, userKeys.gemini, model]);
+      }
+    } else {
+      providers.push(['gemini', askGemini, userKeys.gemini, 'gemini-3.5-flash-lite']);
+    }
+  }
+
   if (providers.length === 0) throw new Error('AI key bulunamadı! `!aichat` panelinden Groq veya Gemini key ekleyin.');
 
   const msgs = [...history, { role: 'user', content: prompt }];
   let lastErr;
-  for (const [name, fn, key] of providers) {
+  for (const [name, fn, key, model] of providers) {
     try {
-      const out = await fn(prompt, msgs, key);
+      const out = await fn(prompt, msgs, key, model);
       if (out) return out;
     } catch (err) {
       lastErr = err;
-      console.error(`[AIChat] ${name} hatası:`, err.message);
+      console.error(`[AIChat] ${name}/${model || 'default'} hatası:`, err.message);
     }
   }
   throw lastErr || new Error('Hiçbir AI sağlayıcı cevap vermedi.');
@@ -106,12 +208,9 @@ export async function startAiChat(userId, tokenIndex, config) {
 
   client.on('messageCreate', async (message) => {
     try {
-      // sadece izinli kanallar
       if (!config.channelIds.includes(message.channel.id)) return;
-      // kendisi & botlar hariç
       if (message.author.id === client.user.id) return;
       if (message.author.bot) return;
-      // bağlam (kanal bazlı son N mesaj)
       const mem = state.memory.get(message.channel.id) || [];
       const prompt = message.content.slice(0, 500);
       if (!prompt) return;
@@ -124,7 +223,6 @@ export async function startAiChat(userId, tokenIndex, config) {
       const reply = await askAI(state.ownerId, prompt, history);
       if (!reply) return;
 
-      // doğallık: cevaptan önce kısa rastgele bekleme
       await new Promise(r => setTimeout(r, 1500 + Math.floor(Math.random() * 4000)));
       await message.channel.sendTyping().catch(() => { });
       await new Promise(r => setTimeout(r, 800 + Math.floor(Math.random() * 2000)));
@@ -186,4 +284,14 @@ export function availableProviders(ownerId) {
   if (keys.groq) list.push('Groq');
   if (keys.gemini) list.push('Gemini');
   return list;
+}
+
+/** Config silme (paneldeki "Hesap Kaldır" için) */
+export function removeAiConfig(userId, tokenIndex) {
+  const store = readModuleJson(FILE);
+  const key = `${userId}:${tokenIndex}`;
+  if (!store[key]) return false;
+  delete store[key];
+  writeModuleJson(FILE, store);
+  return true;
 }
