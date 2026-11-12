@@ -1,4 +1,4 @@
-// src/commands/aichat.js — 🤖 AI Chat Botu (Groq / Gemini) — Pro Panel v2
+// src/commands/aichat.js — 🤖 AI Chat Botu (Groq / Gemini) — Pro Panel v2.1
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder,
@@ -7,10 +7,16 @@ import {
   COLORS, THIN_DIVIDER, errorEmbed, BRAND, UX, section, bullet, statusLine,
 } from '../utils/embeds.js';
 import { getTokens } from '../utils/tokenStore.js';
-import {
-  startAiChat, stopAiChat, isAiRunning, getAiConfigs,
-  availableProviders, removeAiConfig,
-} from '../utils/aiChatRunner.js';
+
+// ✅ FIX: namespace import — removeAiConfig yoksa bile bot çökmez
+import * as aiRunner from '../utils/aiChatRunner.js';
+const {
+  startAiChat, stopAiChat, isAiRunning, getAiConfigs, availableProviders,
+} = aiRunner;
+const removeAiConfig = typeof aiRunner.removeAiConfig === 'function'
+  ? aiRunner.removeAiConfig
+  : () => false;
+
 import {
   getUserKeys, setUserKey, clearUserKey, validateKey, maskKey,
 } from '../utils/aiKeyStore.js';
@@ -106,7 +112,7 @@ export default {
     const action = parts[0];
     const userId = interaction.user.id;
     const tokens = getTokens(userId);
-    const providers = availableProviders(userId); // ✅ FIX: artık tanımlı
+    const providers = availableProviders(userId);
 
     // ── Durum & Düzenle ─────────────────────────────────────────
     if (action === 'durum') {
@@ -304,7 +310,7 @@ export default {
       return interaction.update({
         content: removed
           ? `🗑️ Hesap #${idx + 1} configi silindi${wasRunning ? ' (çalışıyordu, durduruldu)' : ''}.`
-          : `⚠️ Hesap #${idx + 1} configi silinemedi (runner'da \`removeAiConfig\` var mı?).`,
+          : `⚠️ Hesap #${idx + 1} durduruldu fakat config silinemedi.\n> 💡 \`aiChatRunner.js\`'de \`removeAiConfig\` export etmiyorsun.`,
         components: [],
       });
     }
@@ -396,7 +402,6 @@ export default {
 
     await interaction.deferReply({ ephemeral: true });
 
-    // Düzenlemede çalışıyorsa önce durdur
     if (isEdit && isAiRunning(userId, idx)) {
       try { stopAiChat(userId, idx); } catch {}
     }
