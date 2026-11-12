@@ -1,0 +1,44 @@
+{
+  "voiceafk": {},
+  "autotyper": {
+    "1160564359727173792:0": {
+      "userId": "1160564359727173792",
+      "tokenIndex": 0,
+      "channelIds": [
+        "1569473194702802975"
+      ],
+      "updatedAt": "2026-11-12T13:07:23.038Z"
+    },
+    "1067480716159496192:0": {
+      "userId": "1067480716159496192",
+      "tokenIndex": 0,
+      "channelIds": [
+        "1569473194702802975"
+      ],
+      "updatedAt": "2026-11-12T13:07:30.128Z"
+    }
+  },
+  "mobilstatus": {},
+  "spotify": {
+    "1160564359727173792:0": {
+      "userId": "1160564359727173792",
+      "tokenIndex": 0,
+      "track": {
+        "id": "6792037929",
+        "title": "CRUSH!",
+        "artist": "CRUSH",
+        "album": "CRUSH! - Single",
+        "durationMs": 148364,
+        "coverUrl": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/4a/80/cb/4a80cba4-d890-a577-b49d-63063a6b2c50/cover.jpg/600x600bb.jpg",
+        "previewUrl": "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ed/95/37/ed9537df-5fc5-2703-469c-d650b69dadcd/mzaf_13316940930740602417.plus.aac.p.m4a",
+        "pageUrl": "https://music.apple.com/tr/album/crush/6792037919?i=6792037929&uo=4"
+      },
+      "statusChoice": "online",
+      "shuffleLoop": false,
+      "active": true,
+      "updatedAt": "2026-11-12T13:13:58.315Z"
+    }
+  },
+  "streamer": {},
+  "voicerec": {}
+}

@@ -1,0 +1,305 @@
+{
+  "1160564359727173792:0": {
+    "hunts": 44,
+    "battles": 44,
+    "questsGrabbed": 1,
+    "gemsEquipped": 0,
+    "sells": 1,
+    "gambles": 2,
+    "loots": 1,
+    "dailies": 1,
+    "prays": 4,
+    "cookies": 0,
+    "checklist": 0,
+    "animalsCaught": 0,
+    "cowoncyStart": null,
+    "cowoncyLast": null,
+    "peakCowoncy": null,
+    "lowestCowoncy": null,
+    "rareFindings": [
+      {
+        "tier": "gem",
+        "at": 1794490123291
+      },
+      {
+        "tier": "gem",
+        "at": 1794490124982
+      },
+      {
+        "tier": "gem",
+        "at": 1794490125095
+      },
+      {
+        "tier": "gem",
+        "at": 1794490133562
+      },
+      {
+        "tier": "gem",
+        "at": 1794490135113
+      },
+      {
+        "tier": "gem",
+        "at": 1794490137630
+      },
+      {
+        "tier": "gem",
+        "at": 1794490139171
+      },
+      {
+        "tier": "gem",
+        "at": 1794490141261
+      },
+      {
+        "tier": "gem",
+        "at": 1794490141831
+      },
+      {
+        "tier": "gem",
+        "at": 1794490141838
+      },
+      {
+        "tier": "gem",
+        "at": 1794490142180
+      },
+      {
+        "tier": "gem",
+        "at": 1794490148152
+      },
+      {
+        "tier": "gem",
+        "at": 1794490149211
+      },
+      {
+        "tier": "gem",
+        "at": 1794490154017
+      },
+      {
+        "tier": "gem",
+        "at": 1794490154968
+      },
+      {
+        "tier": "gem",
+        "at": 1794490156296
+      },
+      {
+        "tier": "gem",
+        "at": 1794490157940
+      },
+      {
+        "tier": "gem",
+        "at": 1794490158574
+      },
+      {
+        "tier": "gem",
+        "at": 1794490160795
+      },
+      {
+        "tier": "gem",
+        "at": 1794490160817
+      }
+    ],
+    "savedAt": "2026-11-12T13:29:24.885Z"
+  },
+  "1538631547307958352:0": {
+    "hunts": 42,
+    "battles": 42,
+    "questsGrabbed": 2,
+    "gemsEquipped": 0,
+    "sells": 1,
+    "gambles": 2,
+    "loots": 0,
+    "dailies": 2,
+    "prays": 4,
+    "cookies": 0,
+    "checklist": 0,
+    "animalsCaught": 0,
+    "cowoncyStart": null,
+    "cowoncyLast": null,
+    "peakCowoncy": null,
+    "lowestCowoncy": null,
+    "rareFindings": [
+      {
+        "tier": "gem",
+        "at": 1794489719830
+      },
+      {
+        "tier": "gem",
+        "at": 1794489721780
+      },
+      {
+        "tier": "gem",
+        "at": 1794489726442
+      },
+      {
+        "tier": "gem",
+        "at": 1794489742031
+      },
+      {
+        "tier": "gem",
+        "at": 1794489745844
+      },
+      {
+        "tier": "gem",
+        "at": 1794489751766
+      },
+      {
+        "tier": "gem",
+        "at": 1794489766186
+      },
+      {
+        "tier": "gem",
+        "at": 1794489768687
+      },
+      {
+        "tier": "gem",
+        "at": 1794489774684
+      },
+      {
+        "tier": "gem",
+        "at": 1794489790767
+      },
+      {
+        "tier": "gem",
+        "at": 1794489793601
+      },
+      {
+        "tier": "gem",
+        "at": 1794489799289
+      },
+      {
+        "tier": "gem",
+        "at": 1794489813880
+      },
+      {
+        "tier": "gem",
+        "at": 1794489820307
+      },
+      {
+        "tier": "gem",
+        "at": 1794489838053
+      },
+      {
+        "tier": "gem",
+        "at": 1794489845137
+      },
+      {
+        "tier": "gem",
+        "at": 1794489862880
+      },
+      {
+        "tier": "gem",
+        "at": 1794489868643
+      },
+      {
+        "tier": "gem",
+        "at": 1794489884648
+      },
+      {
+        "tier": "gem",
+        "at": 1794489887172
+      }
+    ],
+    "savedAt": "2026-11-12T13:24:54.907Z"
+  },
+  "1538631547307958352:1": {
+    "hunts": 43,
+    "battles": 43,
+    "questsGrabbed": 2,
+    "gemsEquipped": 0,
+    "sells": 1,
+    "gambles": 2,
+    "loots": 0,
+    "dailies": 2,
+    "prays": 4,
+    "cookies": 0,
+    "checklist": 0,
+    "animalsCaught": 0,
+    "cowoncyStart": null,
+    "cowoncyLast": null,
+    "peakCowoncy": null,
+    "lowestCowoncy": null,
+    "rareFindings": [
+      {
+        "tier": "gem",
+        "at": 1794489766195
+      },
+      {
+        "tier": "gem",
+        "at": 1794489768687
+      },
+      {
+        "tier": "gem",
+        "at": 1794489774686
+      },
+      {
+        "tier": "gem",
+        "at": 1794489782207
+      },
+      {
+        "tier": "gem",
+        "at": 1794489790767
+      },
+      {
+        "tier": "gem",
+        "at": 1794489793603
+      },
+      {
+        "tier": "gem",
+        "at": 1794489798315
+      },
+      {
+        "tier": "gem",
+        "at": 1794489799302
+      },
+      {
+        "tier": "gem",
+        "at": 1794489813874
+      },
+      {
+        "tier": "gem",
+        "at": 1794489820307
+      },
+      {
+        "tier": "gem",
+        "at": 1794489827619
+      },
+      {
+        "tier": "gem",
+        "at": 1794489838056
+      },
+      {
+        "tier": "gem",
+        "at": 1794489845139
+      },
+      {
+        "tier": "gem",
+        "at": 1794489852311
+      },
+      {
+        "tier": "gem",
+        "at": 1794489862879
+      },
+      {
+        "tier": "gem",
+        "at": 1794489868647
+      },
+      {
+        "tier": "gem",
+        "at": 1794489884664
+      },
+      {
+        "tier": "gem",
+        "at": 1794489887173
+      },
+      {
+        "tier": "gem",
+        "at": 1794489888945
+      },
+      {
+        "tier": "gem",
+        "at": 1794489909265
+      }
+    ],
+    "savedAt": "2026-11-12T13:25:17.016Z"
+  }
+}
