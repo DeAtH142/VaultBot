@@ -1,0 +1,36 @@
+{
+  "name": "discord-vault-bot",
+  "version": "1.0.0",
+  "description": "Discord Token Kasası ve Hesap Yönetim Botu",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "key": "node -e \"console.log('base64:' + require('crypto').randomBytes(32).toString('base64'))\""
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "vault",
+    "token",
+    "aes"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.16.3",
+    "discord.js-selfbot-v13": "^3.7.1",
+    "dotenv": "^16.4.5",
+    "firebase-admin": "^12.7.0",
+    "minecraft-data": "^3.60.0",
+    "mineflayer": "^4.20.0",
+    "opusscript": "^0.0.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

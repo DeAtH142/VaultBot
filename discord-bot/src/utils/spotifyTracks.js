@@ -1,0 +1,23 @@
+// src/utils/spotifyTracks.js — 🎵 Hazır popüler şarkı havuzu
+export const SPOTIFY_PRESENCE_TRACKS = [
+  { title: 'Blinding Lights', artist: 'The Weeknd' },
+  { title: 'Shape of You', artist: 'Ed Sheeran' },
+  { title: 'Stay', artist: 'The Kid LAROI, Justin Bieber' },
+  { title: 'As It Was', artist: 'Harry Styles' },
+  { title: 'Heat Waves', artist: 'Glass Animals' },
+  { title: 'Industry Baby', artist: 'Lil Nas X, Jack Harlow' },
+  { title: 'Bad Guy', artist: 'Billie Eilish' },
+  { title: 'Levitating', artist: 'Dua Lipa' },
+  { title: 'Peaches', artist: 'Justin Bieber' },
+  { title: 'Montero', artist: 'Lil Nas X' },
+  { title: 'good 4 u', artist: 'Olivia Rodrigo' },
+  { title: 'positions', artist: 'Ariana Grande' },
+  { title: 'drivers license', artist: 'Olivia Rodrigo' },
+  { title: 'Save Your Tears', artist: 'The Weeknd' },
+  { title: 'Watermelon Sugar', artist: 'Harry Styles' },
+  { title: 'Dynamite', artist: 'BTS' },
+  { title: 'Mood', artist: '24kGoldn, Iann Dior' },
+  { title: 'Someone You Loved', artist: 'Lewis Capaldi' },
+  { title: 'Cruel Summer', artist: 'Taylor Swift' },
+  { title: 'Flowers', artist: 'Miley Cyrus' },
+];
