@@ -8,3 +8,4 @@ bot_*.txt
 *.p12
 *.pfx
 .firebase/
+data/
