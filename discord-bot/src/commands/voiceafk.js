@@ -1,4 +1,4 @@
-// src/commands/voiceafk.js — 🌙 Özel AFK & Ses Sistemi (Premium Panel v2)
+// src/commands/voiceafk.js — 🌙 Özel AFK & Ses Sistemi (Sunucu + DM Ses v3)
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -14,7 +14,7 @@ import {
   section, statusLine, errorEmbed,
 } from '../utils/embeds.js';
 
-// ── Kalıcı config deposu (kullanıcı bazlı) ─────────────────────────────
+// ── Kalıcı config deposu (kullanıcı bazlı) ────────────────────────────
 const CONFIG_FILE = path.resolve('data/voiceafk-configs.json');
 
 function _load() {
@@ -46,6 +46,9 @@ const store = {
   },
 };
 
+// 🔑 DM sesleri için sentinel guild ID — runner bunu görünce DM moduna geçer
+const DM_GUILD = '@me';
+
 function isRunning(userId, idx) {
   try { return !!getVoiceAfkStats(userId, idx); } catch { return false; }
 }
@@ -68,12 +71,13 @@ export default {
     });
   },
 
-  // ── Buton Etkileşimleri ──────────────────────────────────────────────
+  // ── Buton Etkileşimleri ──────────────────────────────────────────
   async onButton(interaction, actionParts) {
     const action = actionParts[0];
     const userId = interaction.user.id;
     const tokens = getTokens(userId);
 
+    // 🎙️ SUNUCU SES — hesap seç
     if (action === 'sec') {
       if (tokens.length === 0) {
         return interaction.reply({
@@ -83,11 +87,11 @@ export default {
       }
 
       const embed = new EmbedBuilder()
-        .setTitle(`👤 Hesap Seçimi (${tokens.length} hesap bulundu)`)
+        .setTitle(`👤 Hesap Seçimi — Sunucu Ses (${tokens.length})`)
         .setColor(0x3498db)
         .setDescription([
           `> ${E?.check ?? '✅'} **Bağlı hesaplar menüde işaretli**`,
-          '> Bir hesap seçince ses bağlantısı formu (sunucu + kanal) açılacak.',
+          '> Bir hesap seçince **Sunucu + Ses Kanalı** formu açılacak.',
           '',
           DIVIDER,
         ].join('\n'));
@@ -105,13 +109,55 @@ export default {
       const row = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId('voiceafk:hesapayari')
-          .setPlaceholder('Ses kanalına bağlanacak hesabı seç...')
+          .setPlaceholder('Sunucu ses kanalına bağlanacak hesabı seç...')
           .addOptions(options),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    }
 
-    } else if (action === 'kaldir') {
+    // 💬 DM SES — hesap seç
+    if (action === 'dm') {
+      if (tokens.length === 0) {
+        return interaction.reply({
+          content: '📦 Kasanızda hesap yok! Önce `!hesaplarim` panelinden `!tokenekle` ile ekleyin.',
+          ephemeral: true,
+        });
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(`💬 Hesap Seçimi — DM Ses (${tokens.length})`)
+        .setColor(0x9b59b6)
+        .setDescription([
+          `> ${E?.check ?? '✅'} **DM sesine girecek hesabı seç**`,
+          '> Sadece **DM Kanal ID** gireceksin — sunucu gerekmiyor.',
+          '> Hesap zaten o grup DM\'in içinde olmalı.',
+          '',
+          DIVIDER,
+        ].join('\n'));
+
+      const options = tokens.map((t, i) => {
+        const running = isRunning(userId, i);
+        return {
+          label: (t.username || t.label || `Hesap ${i + 1}`).slice(0, 100),
+          description: running ? '✅ Zaten bağlı' : '⭕ Hazır',
+          value: String(i),
+          emoji: running ? '📞' : '💤',
+        };
+      });
+
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId('voiceafk:dmayari')
+          .setPlaceholder('DM sesine bağlanacak hesabı seç...')
+          .addOptions(options),
+      );
+
+      return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+    }
+
+    // 🗑️ Hesap kaldır
+    if (action === 'kaldir') {
       const configs = store.list(userId);
       const runningIdxs = tokens.map((_, i) => i).filter(i => isRunning(userId, i));
       const idxs = [...new Set([...configs.map(c => c.tokenIndex), ...runningIdxs])];
@@ -125,9 +171,11 @@ export default {
 
       const options = idxs.map(i => {
         const running = isRunning(userId, i);
+        const cfg = store.get(userId, i);
+        const typeTag = cfg?.type === 'dm' ? '💬 DM' : '🎙️ Sunucu';
         return {
           label: accountName(tokens, i).slice(0, 100),
-          description: running ? '🎙️ Bağlı — durdurmak için seç' : '⭕ Zaten durmuş',
+          description: running ? `${typeTag} — Bağlı, durdurmak için seç` : `${typeTag} — Zaten durmuş`,
           value: String(i),
           emoji: '🛑',
         };
@@ -136,17 +184,19 @@ export default {
       const row = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId('voiceafk:kaldironay')
-          .setPlaceholder('Kaldırmak/durdurmak istediğin hesabı seç...')
+          .setPlaceholder('Kaldırmak istediğin hesabı seç...')
           .addOptions(options),
       );
 
-      await interaction.reply({
+      return interaction.reply({
         content: '🛑 **Kaldırmak istediğin hesabı seç:**',
         components: [row],
         ephemeral: true,
       });
+    }
 
-    } else if (action === 'rapor') {
+    // 📊 Durum raporu
+    if (action === 'rapor') {
       const configs = store.list(userId);
       const runningIdxs = tokens.map((_, i) => i).filter(i => isRunning(userId, i));
       const idxs = [...new Set([...configs.map(c => c.tokenIndex), ...runningIdxs])];
@@ -162,18 +212,25 @@ export default {
         const name = accountName(tokens, i);
         const cfg = store.get(userId, i);
         const s = isRunning(userId, i) ? getVoiceAfkStats(userId, i) : null;
+        const typeTag = cfg?.type === 'dm' ? '💬 DM Ses' : '🎙️ Sunucu Ses';
 
         if (s) {
+          const target = cfg?.type === 'dm'
+            ? `> 💬 DM Kanal: \`${cfg.channelId}\``
+            : `> 📡 Sunucu: \`${cfg.guildId}\` | Kanal: \`${cfg.channelId}\``;
           return [
-            `> ✅ **${name}** — Bağlı`,
+            `> ✅ **${name}** — ${typeTag} Bağlı`,
             `> ⏱️ Süre: \`${s.durationMin} dk\` | 🔁 Yeniden Bağlanma: \`${s.reconnections}\``,
-            cfg ? `> 📡 Sunucu: \`${cfg.guildId}\` | Kanal: \`${cfg.channelId}\`` : null,
+            cfg ? target : null,
           ].filter(Boolean).join('\n');
         }
+
+        const targetLine = cfg?.type === 'dm'
+          ? `> 💬 Son DM Kanal: \`${cfg.channelId}\``
+          : (cfg ? `> 📡 Son Sunucu: \`${cfg.guildId}\` | Kanal: \`${cfg.channelId}\`` : '> 📡 *Yapılandırılmadı*');
         return [
-          `> ⭕ **${name}** — Durduruldu`,
-          cfg ? `> 📡 Son Sunucu: \`${cfg.guildId}\` | Kanal: \`${cfg.channelId}\``
-              : '> 📡 *Henüz yapılandırılmadı*',
+          `> ⭕ **${name}** — ${typeTag} Durduruldu`,
+          targetLine,
         ].join('\n');
       }).join('\n\n');
 
@@ -184,22 +241,26 @@ export default {
         .setFooter(FOOTER())
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
 
-    } else if (action === 'tumukaldir' || action === 'tumukaldır') {
+    // 🛑 Tümünü durdur
+    if (action === 'tumukaldir' || action === 'tumukaldır') {
       let stopped = 0;
       tokens.forEach((_, i) => {
         try { if (stopVoiceAfk(userId, i).success) stopped++; } catch {}
       });
-      await interaction.update({
+      return interaction.update({
         content: [
           `🛑 **${stopped}** hesap ses kanalından çıkarıldı.`,
           `> 💡 Yapılandırmalar korundu — \`Yeniden Başlat\` ile geri bağlayabilirsiniz.`,
         ].join('\n'),
         components: [],
       });
+    }
 
-    } else if (action === 'restart') {
+    // 🔄 Yeniden başlat
+    if (action === 'restart') {
       await interaction.deferReply({ ephemeral: true });
       const configs = store.list(userId);
       if (configs.length === 0) {
@@ -213,9 +274,14 @@ export default {
       for (const cfg of configs) {
         const name = accountName(tokens, cfg.tokenIndex);
         try {
-          const res = await startVoiceAfk(userId, cfg.tokenIndex, cfg.guildId, cfg.channelId);
-          if (res.success) { started++; results.push(`> ✅ **${name}** — yeniden bağlandı`); }
-          else results.push(`> ❌ **${name}** — \`${res.error}\``);
+          const gid = cfg.type === 'dm' ? DM_GUILD : cfg.guildId;
+          const res = await startVoiceAfk(userId, cfg.tokenIndex, gid, cfg.channelId);
+          if (res.success) {
+            started++;
+            results.push(`> ✅ **${name}** — ${cfg.type === 'dm' ? '💬 DM' : '🎙️ Sunucu'} yeniden bağlandı`);
+          } else {
+            results.push(`> ❌ **${name}** — \`${res.error}\``);
+          }
         } catch (e) {
           results.push(`> ❌ **${name}** — \`${e.message}\``);
         }
@@ -229,11 +295,11 @@ export default {
         .setFooter(FOOTER())
         .setTimestamp();
 
-      await interaction.editReply({ embeds: [embed] });
+      return interaction.editReply({ embeds: [embed] });
     }
   },
 
-  // ── Menü Seçimleri ───────────────────────────────────────────────────
+  // ── Menü Seçimleri ───────────────────────────────────────────────
   async onSelect(interaction, actionParts) {
     const action = actionParts[0];
     const userId = interaction.user.id;
@@ -246,14 +312,14 @@ export default {
 
       const modal = new ModalBuilder()
         .setCustomId(`voiceafk:modal:${idx}`)
-        .setTitle(`Ses Bağlantısı — ${name}`.slice(0, 45));
+        .setTitle(`Sunucu Ses — ${name}`.slice(0, 45));
 
       const guildInput = new TextInputBuilder()
         .setCustomId('guild_id')
         .setLabel('Sunucu ID')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('123456789012345678')
-        .setValue(existing.guildId || '')
+        .setValue(existing.type === 'guild' ? (existing.guildId || '') : '')
         .setRequired(true);
 
       const channelInput = new TextInputBuilder()
@@ -261,7 +327,7 @@ export default {
         .setLabel('Ses Kanalı ID')
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('123456789012345678')
-        .setValue(existing.channelId || '')
+        .setValue(existing.type === 'guild' ? (existing.channelId || '') : '')
         .setRequired(true);
 
       modal.addComponents(
@@ -269,71 +335,132 @@ export default {
         new ActionRowBuilder().addComponents(channelInput),
       );
 
-      await interaction.showModal(modal);
+      return interaction.showModal(modal);
+    }
 
-    } else if (action === 'kaldironay') {
+    if (action === 'dmayari') {
+      const idx = parseInt(interaction.values[0], 10);
+      const tokens = getTokens(userId);
+      const existing = store.get(userId, idx) || {};
+      const name = accountName(tokens, idx);
+
+      const modal = new ModalBuilder()
+        .setCustomId(`voiceafk:modaldm:${idx}`)
+        .setTitle(`DM Ses — ${name}`.slice(0, 45));
+
+      const channelInput = new TextInputBuilder()
+        .setCustomId('dm_channel_id')
+        .setLabel('DM Kanal ID (grup DM / arama ID)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('123456789012345678')
+        .setValue(existing.type === 'dm' ? (existing.channelId || '') : '')
+        .setRequired(true);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(channelInput),
+      );
+
+      return interaction.showModal(modal);
+    }
+
+    if (action === 'kaldironay') {
       const idx = parseInt(interaction.values[0], 10);
       let stopped = false;
       try { stopped = stopVoiceAfk(userId, idx).success; } catch {}
       store.del(userId, idx);
 
-      await interaction.update({
+      return interaction.update({
         content: stopped
-          ? `✅ Hesap #${idx + 1} ses kanalından çıkarıldı ve yapılandırma silindi.`
+          ? `✅ Hesap #${idx + 1} bağlantısı kesildi ve yapılandırma silindi.`
           : `⭕ Hesap #${idx + 1} zaten bağlı değildi. Yapılandırma temizlendi.`,
         components: [],
       });
     }
   },
 
-  // ── Modal Yanıtı ─────────────────────────────────────────────────────
+  // ── Modal Yanıtları ─────────────────────────────────────────────
   async onModalSubmit(interaction, actionParts) {
-    if (actionParts[0] !== 'modal') return;
-    const idx = parseInt(actionParts[1], 10);
     const userId = interaction.user.id;
 
-    const guildId = interaction.fields.getTextInputValue('guild_id').trim();
-    const channelId = interaction.fields.getTextInputValue('channel_id').trim();
+    // 🎙️ Sunucu ses modal
+    if (actionParts[0] === 'modal') {
+      const idx = parseInt(actionParts[1], 10);
+      const guildId = interaction.fields.getTextInputValue('guild_id').trim();
+      const channelId = interaction.fields.getTextInputValue('channel_id').trim();
 
-    await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ ephemeral: true });
+      store.set(userId, idx, { type: 'guild', guildId, channelId, enabled: true });
 
-    // Ayarları kaydet (restart için)
-    store.set(userId, idx, { guildId, channelId, enabled: true });
+      const tokens = getTokens(userId);
+      const name = accountName(tokens, idx);
+      const res = await startVoiceAfk(userId, idx, guildId, channelId);
 
-    const tokens = getTokens(userId);
-    const name = accountName(tokens, idx);
+      if (!res.success) {
+        return interaction.editReply({
+          embeds: [errorEmbed(`Ses bağlantısı başlatılamadı:\n\`${res.error}\``)],
+        });
+      }
 
-    const res = await startVoiceAfk(userId, idx, guildId, channelId);
+      const embed = new EmbedBuilder()
+        .setTitle('🎙️ Sunucu Ses AFK Başlatıldı')
+        .setColor(COLORS.success ?? 0x2ecc71)
+        .setDescription([
+          `\`${THIN_DIVIDER}\``,
+          `> 👤 **Hesap:** \`${name}\``,
+          `> 📡 **Sunucu:** \`${guildId}\``,
+          `> 🔊 **Kanal:** \`${channelId}\``,
+          `> 🔁 **Yeniden Deneme:** \`10/kanal\``,
+          `> 🔒 **Şifreleme:** \`AES-256-GCM\``,
+          '',
+          `> Koparsa otomatik geri bağlanır (10 deneme limitiyle).`,
+          `\`${THIN_DIVIDER}\``,
+        ].join('\n'))
+        .setFooter(FOOTER())
+        .setTimestamp();
 
-    if (!res.success) {
-      return interaction.editReply({
-        embeds: [errorEmbed(`Ses bağlantısı başlatılamadı:\n\`${res.error}\``)],
-      });
+      return interaction.editReply({ embeds: [embed] });
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle('🎙️ Ses AFK Başlatıldı')
-      .setColor(COLORS.success ?? 0x2ecc71)
-      .setDescription([
-        `\`${THIN_DIVIDER}\``,
-        `> 👤 **Hesap:** \`${name}\``,
-        `> 📡 **Sunucu:** \`${guildId}\``,
-        `> 🔊 **Kanal:** \`${channelId}\``,
-        `> 🔁 **Yeniden Deneme:** \`10/kanal\``,
-        `> 🔒 **Şifreleme:** \`AES-256-GCM\``,
-        '',
-        `> Koparsa otomatik geri bağlanır (10 deneme limitiyle).`,
-        `> Durdurduğunda \`Durum Raporu\`'ndan geçmişi görebilirsin.`,
-        `\`${THIN_DIVIDER}\``,
-      ].join('\n'))
-      .setFooter(FOOTER())
-      .setTimestamp();
+    // 💬 DM ses modal
+    if (actionParts[0] === 'modaldm') {
+      const idx = parseInt(actionParts[1], 10);
+      const channelId = interaction.fields.getTextInputValue('dm_channel_id').trim();
 
-    await interaction.editReply({ embeds: [embed] });
+      await interaction.deferReply({ ephemeral: true });
+      store.set(userId, idx, { type: 'dm', channelId, enabled: true });
+
+      const tokens = getTokens(userId);
+      const name = accountName(tokens, idx);
+      const res = await startVoiceAfk(userId, idx, DM_GUILD, channelId);
+
+      if (!res.success) {
+        return interaction.editReply({
+          embeds: [errorEmbed(`DM ses bağlantısı başlatılamadı:\n\`${res.error}\``)],
+        });
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle('💬 DM Ses AFK Başlatıldı')
+        .setColor(0x9b59b6)
+        .setDescription([
+          `\`${THIN_DIVIDER}\``,
+          `> 👤 **Hesap:** \`${name}\``,
+          `> 💬 **DM Kanal:** \`${channelId}\``,
+          `> 🔁 **Yeniden Deneme:** \`10/kanal\``,
+          `> 🔒 **Şifreleme:** \`AES-256-GCM\``,
+          '',
+          `> Grup DM ses aramasına bağlandı. Koparsa otomatik geri bağlanır.`,
+          `\`${THIN_DIVIDER}\``,
+        ].join('\n'))
+        .setFooter(FOOTER())
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed] });
+    }
   },
 };
 
-// ── Ana Panel Embed ────────────────────────────────────────────────────
+// ── Ana Panel Embed ────────────────────────────────────────────
 export function createMainEmbed(client) {
   return new EmbedBuilder()
     .setColor(0xfaa61a)
@@ -342,24 +469,24 @@ export function createMainEmbed(client) {
     .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
     .setDescription([
       UX.header,
-      `*${UX.arrow} Kasadaki her hesabı tek tek ses kanalına bağla*`,
+      `*${UX.arrow} Sunucu sesi + DM sesi tek panelde*`,
       UX.footerLine,
       '',
       statusLine([
-        ['🎙️', 'Hedef', 'Seçili Hesap'],
-        ['🔁', 'Deneme', '10/kanal'],
+        ['🎙️', 'Sunucu Ses', 'Guild + Kanal'],
+        ['💬', 'DM Ses', 'Sadece Kanal ID'],
         ['🔒', 'Şifreleme', 'AES-256-GCM'],
       ]),
       '',
       section('Nasıl Çalışır?'),
-      `> ${UX.dot2} **Havuzdan Hesap Seç** butonuna bas`,
-      `> ${UX.dot2} Menüden bir hesap seç — form açılacak`,
-      `> ${UX.dot2} Sunucu + Ses Kanalı ID gir, bağlanır`,
+      `> ${UX.dot2} 🎙️ **Havuzdan Hesap Seç** — Sunucu ses kanalına bağlan`,
+      `> ${UX.dot2} 💬 **DM Sese Gir** — Grup DM aramalarına bağlan (sadece kanal ID)`,
       `> ${UX.dot2} Kanal bulunamazsa **10 kez** arar, sonra bırakır`,
       `> ${UX.dot2} Koparsa otomatik geri bağlanır`,
       '',
       section('Kontrol Paneli'),
-      `> ${UX.dot2} 👤 **Hesap Seç** — Belirli hesabı bağla`,
+      `> ${UX.dot2} 👤 **Hesap Seç** — Sunucu ses kanalına bağla`,
+      `> ${UX.dot2} 💬 **DM Sese Gir** — DM aramasına bağla`,
       `> ${UX.dot2} 🗑️ **Hesap Kaldır** — Belirli hesabı durdur`,
       `> ${UX.dot2} 📊 **Durum Raporu** — Canlı istatistikler`,
       `> ${UX.dot2} 🔄 **Yeniden Başlat** — Kayıtlı tüm hesapları tekrar bağla`,
@@ -368,7 +495,7 @@ export function createMainEmbed(client) {
     .setTimestamp();
 }
 
-// ── Ana Buton Satırları ────────────────────────────────────────────────
+// ── Ana Buton Satırları ───────────────────────────────────────
 export function createMainRows() {
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -376,6 +503,11 @@ export function createMainRows() {
       .setLabel('Havuzdan Hesap Seç')
       .setEmoji('👤')
       .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('voiceafk:dm')
+      .setLabel('DM Sese Gir')
+      .setEmoji('💬')
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('voiceafk:kaldir')
       .setLabel('Hesap Kaldır')
