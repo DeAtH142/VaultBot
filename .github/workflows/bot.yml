@@ -5,7 +5,6 @@ on:
     - cron: '0 */5 * * *'
   workflow_dispatch:
 
-# Ayni anda sadece 1 run - yenisi baslayinca eskisini iptal eder
 concurrency:
   group: vaultbot-run
   cancel-in-progress: true
@@ -18,26 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 1. CACHE
-      - name: Data cache geri yukle
-        uses: actions/cache@v4
-        with:
-          path: discord-bot/data
-          key: vaultbot-data-${{ github.run_id }}
-          restore-keys: |
-            vaultbot-data-
-
-      # 2. NODE KURULUMU
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      # 3. ANA BAGIMLILIKLAR
       - name: Bagimliliklari kur
         working-directory: ./discord-bot
         run: npm install
 
-      # 4. .env DOSYASI
       - name: .env olustur
         working-directory: ./discord-bot
         run: |
@@ -46,10 +33,15 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT=${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           EOF
-          echo ".env dosyasi olusturuldu:"
-          grep -o '^[A-Z_]*=' .env | tr -d '='
 
-      # 5. BOTU CALISTIR
+      # 1. BOT BAŞLAMADAN ÖNCE VERİLERİ FIREBASE'DEN ÇEK
+      - name: Firebase'den verileri cek (Pull)
+        working-directory: ./discord-bot
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/cloud-sync.js pull
+
+      # 2. BOTU ÇALIŞTIR
       - name: Botu calistir
         working-directory: ./discord-bot
         env:
@@ -57,3 +49,11 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: node src/index.js
+
+      # 3. BOT KAPANDIKTAN SONRA VERİLERİ FIREBASE'E YÜKLE
+      - name: Firebase'e verileri yukle (Push)
+        if: always() # Bot hata verse bile verileri kaydetmeye çalış
+        working-directory: ./discord-bot
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/cloud-sync.js push
