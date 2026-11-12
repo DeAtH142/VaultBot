@@ -44,6 +44,7 @@ jobs:
           cat > .env <<'EOF'
           DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
           FIREBASE_SERVICE_ACCOUNT=${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           EOF
           echo ".env dosyasi olusturuldu:"
           grep -o '^[A-Z_]*=' .env | tr -d '='
@@ -52,5 +53,7 @@ jobs:
       - name: Botu calistir
         working-directory: ./discord-bot
         env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
         run: node src/index.js
