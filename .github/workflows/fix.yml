@@ -1,0 +1,21 @@
+name: Fix Firebase Data
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps
+        working-directory: ./discord-bot
+        run: npm install
+      - name: Push Good Data to Firebase
+        working-directory: ./discord-bot
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/cloud-sync.js push
