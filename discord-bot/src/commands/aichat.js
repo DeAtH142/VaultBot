@@ -1,4 +1,4 @@
-// src/commands/aichat.js — 🤖 AI Chat Botu (Groq / Gemini) — Pro Panel v2.1
+// src/commands/aichat.js — 🤖 AI Chat Botu (Groq / Gemini) — Pro Panel v2.2
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder,
@@ -389,8 +389,14 @@ export default {
     }
 
     // ── Yeni config veya düzenle ────────────────────────────────
+    // ✅ FIX: 'aichat:modal:0' → parts = ['modal', '0'] | 'aichat:editmodal:0' → ['editmodal', '0']
+    // Eski kod: Number(isEdit ? parts[1] : action) = Number('modal') = NaN ❌
     const isEdit = action === 'editmodal';
-    const idx = Number(isEdit ? parts[1] : action);
+    const idx = Number(parts[1]);
+
+    if (!Number.isInteger(idx) || idx < 0) {
+      return interaction.reply({ content: '❌ Geçersiz hesap numarası.', ephemeral: true });
+    }
 
     const rawChannels = interaction.fields.getTextInputValue('channels');
     const channelIds = rawChannels.split(/[\n, ]+/).map(s => s.trim()).filter(s => /^\d{5,}$/.test(s));
@@ -401,6 +407,14 @@ export default {
     }
 
     await interaction.deferReply({ ephemeral: true });
+
+    // ✅ EKSTRA GÜVENCE: idx gerçekten var mı?
+    const tokens = getTokens(userId) || [];
+    if (!tokens[idx]) {
+      return interaction.editReply({
+        embeds: [errorEmbed(`❌ Hesap #${idx + 1} bulunamadı.\n> Kasada **${tokens.length}** hesap var (0-${tokens.length - 1} arası).`)],
+      });
+    }
 
     if (isEdit && isAiRunning(userId, idx)) {
       try { stopAiChat(userId, idx); } catch {}
@@ -416,7 +430,7 @@ export default {
         .setColor(COLORS.success)
         .setDescription([
           `\`${THIN_DIVIDER}\``,
-          `> 🧠 **Hesap:** \`#${idx + 1}\``,
+          `> 🧠 **Hesap:** \`#${idx + 1}\` — \`${tokens[idx].username || tokens[idx].label || 'isimsiz'}\``,
           `> 💬 **Kanal(lar):** ${channelIds.map(c => `<#${c}>`).join(', ')}`,
           `> 🎭 **Kişilik:** \`${(persona || 'varsayılan').slice(0, 80)}\``,
           '',
