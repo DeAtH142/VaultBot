@@ -1,7 +1,7 @@
-// src/utils/aiChatRunner.js — 🤖 AI Chat Runner (Groq + Gemini) v3
+// src/utils/aiChatRunner.js — 🤖 AI Chat Runner (Groq + Gemini + OpenAI) v4
 // Seçili hesap belirli kanallarda insan gibi konuşur.
 // API key'ler HER KULLANICININ kendine ait — panelden girilir, AES ile şifreli saklanır.
-// Çalışan modeller otomatik keşfedilir ve data/ai-models.json'a kaydedilir.
+// Çalışan modeller otomatik keşfedilir (paralel test) ve data/ai-models.json'a kaydedilir.
 
 import { Client } from 'discord.js-selfbot-v13';
 import { decrypt } from './crypto.js';
@@ -14,14 +14,26 @@ import path from 'path';
 const FILE = 'ai_chats.json';
 const MODEL_FILE = path.resolve('data/ai-models.json');
 
-const sessions = new Map(); // `${userId}:${tokenIndex}` -> { client, config, memory: Map<channelId, string[]> }
-const MEMORY_LIMIT = 12;    // kanal başı son N mesaj hatırlanır (bağlam)
+const sessions = new Map();
+const MEMORY_LIMIT = 12;
 
 // ── Model Deposu ────────────────────────────────────────────────────────
 
 function loadModels() {
-  try { return JSON.parse(fs.readFileSync(MODEL_FILE, 'utf8')); }
-  catch { return { groq: [], gemini: [] }; }
+  try {
+    const raw = JSON.parse(fs.readFileSync(MODEL_FILE, 'utf8'));
+    // Eski formatı yeni formata dönüştür
+    if (Array.isArray(raw.groq) || Array.isArray(raw.gemini) || Array.isArray(raw.openai)) {
+      return {
+        groq: { working: raw.groq || [], total: raw.groq?.length || 0 },
+        gemini: { working: raw.gemini || [], total: raw.gemini?.length || 0 },
+        openai: { working: raw.openai || [], total: raw.openai?.length || 0 },
+      };
+    }
+    return raw;
+  } catch {
+    return { groq: { working: [], total: 0 }, gemini: { working: [], total: 0 }, openai: { working: [], total: 0 } };
+  }
 }
 function saveModels(data) {
   fs.mkdirSync(path.dirname(MODEL_FILE), { recursive: true });
@@ -29,13 +41,33 @@ function saveModels(data) {
 }
 
 export function getWorkingModels(provider) {
-  return loadModels()[provider] || [];
+  return loadModels()[provider]?.working || [];
+}
+export function getModelStats(provider) {
+  const m = loadModels()[provider];
+  if (!m) return { active: 0, total: 0 };
+  return { active: (m.working || []).length, total: m.total || 0 };
 }
 
-/**
- * API key ile tüm modelleri test eder ve çalışanları data/ai-models.json'a kaydeder.
- * Key kaydedildikten sonra çağrılmalıdır.
- */
+// ── Paralel test (concurrency limitli) ────────────────────────────────
+
+async function parallelTest(models, testFn, concurrency = 5) {
+  const working = [];
+  const queue = [...models];
+  const workers = Array(Math.min(concurrency, models.length)).fill().map(async () => {
+    while (queue.length) {
+      const model = queue.shift();
+      try {
+        if (await testFn(model)) working.push(model);
+      } catch { /* bu model çalışmıyor */ }
+    }
+  });
+  await Promise.all(workers);
+  return working;
+}
+
+// ── Model Keşfi ────────────────────────────────────────────────────────
+
 export async function discoverAndSaveModels(userId, provider, apiKey) {
   let modelIds = [];
   try {
@@ -44,41 +76,51 @@ export async function discoverAndSaveModels(userId, provider, apiKey) {
         headers: { Authorization: `Bearer ${apiKey}` },
       });
       if (!res.ok) throw new Error(`Groq modelleri alınamadı: ${res.status}`);
-      const json = await res.json();
-      modelIds = json.data.map(m => m.id);
+      modelIds = (await res.json()).data.map(m => m.id);
     } else if (provider === 'gemini') {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       if (!res.ok) throw new Error(`Gemini modelleri alınamadı: ${res.status}`);
-      const json = await res.json();
-      modelIds = json.models.map(m => m.name.replace('models/', ''));
+      modelIds = (await res.json()).models.map(m => m.name.replace('models/', ''));
+    } else if (provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(`OpenAI modelleri alınamadı: ${res.status}`);
+      modelIds = (await res.json()).data.map(m => m.id);
     }
 
-    const working = [];
-    for (const id of modelIds) {
-      try {
-        let testOk = false;
-        if (provider === 'groq') {
-          const test = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: id, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5 }),
-          });
-          testOk = test.ok;
-        } else if (provider === 'gemini') {
-          const test = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${id}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }] }),
-          });
-          testOk = test.ok;
-        }
-        if (testOk) working.push(id);
-      } catch (e) { /* bu model çalışmıyor, geç */ }
-    }
+    const testFn = async (model) => {
+      if (provider === 'groq') {
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5 }),
+        });
+        return r.ok;
+      }
+      if (provider === 'openai') {
+        const r = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 5 }),
+        });
+        return r.ok;
+      }
+      // gemini
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }] }),
+      });
+      return r.ok;
+    };
+
+    const working = await parallelTest(modelIds, testFn, 5);
 
     const store = loadModels();
-    store[provider] = working;
+    store[provider] = { working, total: modelIds.length };
     saveModels(store);
+
     return { success: true, working, total: modelIds.length };
   } catch (err) {
     return { success: false, error: err.message };
@@ -93,12 +135,7 @@ async function askGroq(prompt, history, apiKey, model) {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: model || 'llama-3.1-8b-instant',
-      messages: history,
-      max_tokens: 180,
-      temperature: 0.9,
-    }),
+    body: JSON.stringify({ model: model || 'llama-3.1-8b-instant', messages: history, max_tokens: 180, temperature: 0.9 }),
     signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) throw new Error(`Groq API hatası ${res.status}`);
@@ -109,7 +146,7 @@ async function askGroq(prompt, history, apiKey, model) {
 async function askGemini(prompt, history, apiKey, model) {
   const key = apiKey || process.env.GEMINI_API_KEY;
   if (!key) throw new Error('Gemini API key bulunamadı! `!aichat` panelinden ekleyin.');
-  const mdl = model || 'gemini-3.5-flash-lite';
+  const mdl = model || 'gemini-2.5-flash';
   const contents = history.map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
@@ -125,41 +162,54 @@ async function askGemini(prompt, history, apiKey, model) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 }
 
+async function askOpenAI(prompt, history, apiKey, model) {
+  const key = apiKey || process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('OpenAI API key bulunamadı! `!aichat` panelinden ekleyin.');
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model: model || 'gpt-4o-mini', messages: history, max_tokens: 180, temperature: 0.9 }),
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!res.ok) throw new Error(`OpenAI API hatası ${res.status}`);
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content?.trim();
+}
+
 /**
- * Sırayla dener: önce çalışan Groq modelleri, sonra çalışan Gemini modelleri.
- * Çalışan model yoksa varsayılan modele döner.
+ * Önce kullanıcının seçtiği modeli dener; başarısız olursa çalışan modelleri sırayla dener.
  */
-export async function askAI(ownerId, prompt, history = []) {
+export async function askAI(ownerId, prompt, history = [], preferredProvider = null, preferredModel = null) {
   const userKeys = getUserKeys(ownerId);
   const providers = [];
 
-  // 1. Çalışan modelleri al
-  const groqModels = getWorkingModels('groq');
-  const geminiModels = getWorkingModels('gemini');
-
-  // 2. Provider listesini oluştur
-  if (userKeys.groq) {
-    if (groqModels.length > 0) {
-      // Çalışan her Groq modelini sırayla dene
-      for (const model of groqModels) {
-        providers.push(['groq', askGroq, userKeys.groq, model]);
-      }
-    } else {
-      // Hiç çalışan model yoksa varsayılanı dene
-      providers.push(['groq', askGroq, userKeys.groq, 'llama-3.1-8b-instant']);
-    }
-  }
-  if (userKeys.gemini) {
-    if (geminiModels.length > 0) {
-      for (const model of geminiModels) {
-        providers.push(['gemini', askGemini, userKeys.gemini, model]);
-      }
-    } else {
-      providers.push(['gemini', askGemini, userKeys.gemini, 'gemini-3.5-flash-lite']);
-    }
+  // 1. Kullanıcının seçtiği model (varsa) öncelikli
+  if (preferredProvider && preferredModel && userKeys[preferredProvider]) {
+    const fn = preferredProvider === 'groq' ? askGroq
+      : preferredProvider === 'gemini' ? askGemini
+      : askOpenAI;
+    providers.push([preferredProvider, fn, userKeys[preferredProvider], preferredModel]);
   }
 
-  if (providers.length === 0) throw new Error('AI key bulunamadı! `!aichat` panelinden Groq veya Gemini key ekleyin.');
+  // 2. Çalışan modeller (fallback)
+  for (const p of ['groq', 'gemini', 'openai']) {
+    if (!userKeys[p]) continue;
+    const working = getWorkingModels(p);
+    const fn = p === 'groq' ? askGroq : p === 'gemini' ? askGemini : askOpenAI;
+    if (working.length > 0) {
+      // Çalışanları dene (ilk 3 tanesi yeterli, hepsini denemek yavaşlatır)
+      for (const model of working.slice(0, 3)) {
+        if (preferredProvider === p && preferredModel === model) continue; // zaten denendi
+        providers.push([p, fn, userKeys[p], model]);
+      }
+    } else {
+      // Çalışan yoksa varsayılan
+      const fallback = p === 'groq' ? 'llama-3.1-8b-instant' : p === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini';
+      providers.push([p, fn, userKeys[p], fallback]);
+    }
+  }
+
+  if (providers.length === 0) throw new Error('AI key bulunamadı! `!aichat` panelinden Groq, Gemini veya OpenAI key ekleyin.');
 
   const msgs = [...history, { role: 'user', content: prompt }];
   let lastErr;
@@ -169,7 +219,7 @@ export async function askAI(ownerId, prompt, history = []) {
       if (out) return out;
     } catch (err) {
       lastErr = err;
-      console.error(`[AIChat] ${name}/${model || 'default'} hatası:`, err.message);
+      console.error(`[AIChat] ${name}/${model} hatası:`, err.message);
     }
   }
   throw lastErr || new Error('Hiçbir AI sağlayıcı cevap vermedi.');
@@ -216,11 +266,11 @@ export async function startAiChat(userId, tokenIndex, config) {
       if (!prompt) return;
 
       const history = [
-        { role: 'system', content: config.systemPrompt || 'Sen normal bir Discord kullanıcısısın. Kısa, doğal ve samimi cevap ver. Türkçe konuş. Emoji kullanabilirsin. Uzun listeden kaçın.' },
+        { role: 'system', content: config.systemPrompt || 'Sen normal bir Discord kullanıcısısın. Kısa, doğal ve samimi cevap ver. Türkçe konuş. Emoji kullanabilirsin.' },
         ...mem.map(m => ({ role: m.role, content: m.content })),
       ];
 
-      const reply = await askAI(state.ownerId, prompt, history);
+      const reply = await askAI(state.ownerId, prompt, history, config.provider || null, config.model || null);
       if (!reply) return;
 
       await new Promise(r => setTimeout(r, 1500 + Math.floor(Math.random() * 4000)));
@@ -266,7 +316,6 @@ function removePersist(userId, tokenIndex) {
   writeModuleJson(FILE, store);
 }
 
-/** Reboot Recovery */
 export async function recoverAiChats() {
   const store = readModuleJson(FILE);
   for (const [key, cfg] of Object.entries(store)) {
@@ -277,16 +326,15 @@ export async function recoverAiChats() {
   }
 }
 
-/** Kullanıcının yüklü key'leri (maskelenmiş gösterim için) */
 export function availableProviders(ownerId) {
   const keys = getUserKeys(ownerId);
   const list = [];
   if (keys.groq) list.push('Groq');
   if (keys.gemini) list.push('Gemini');
+  if (keys.openai) list.push('OpenAI');
   return list;
 }
 
-/** Config silme (paneldeki "Hesap Kaldır" için) */
 export function removeAiConfig(userId, tokenIndex) {
   const store = readModuleJson(FILE);
   const key = `${userId}:${tokenIndex}`;
