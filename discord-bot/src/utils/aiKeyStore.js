@@ -1,7 +1,6 @@
-// src/utils/aiKeyStore.js — 🔑 Kullanıcı başına AI API Key deposu v2
-// Her kullanıcı kendi Groq / Gemini key'ini panelden girer.
-// Key'ler tokens.json ile AYNI şifreleme (AES-256-GCM) ile şifreli saklanır.
-// v2: Key kaydedildikten sonra otomatik model keşfi (setUserKeyAndDiscover)
+// src/utils/aiKeyStore.js — 🔑 Kullanıcı başına AI API Key deposu v3
+// Groq / Gemini / OpenAI key'leri AES-256-GCM ile şifreli saklanır.
+// v3: OpenAI desteği + setUserKeyAndDiscover (otomatik model keşfi)
 import { encrypt, decrypt } from './crypto.js';
 import { readModuleJson, writeModuleJson } from './moduleStore.js';
 
@@ -14,7 +13,7 @@ function readStore() {
 export function getUserKeys(userId) {
   const store = readStore();
   const entry = store[userId];
-  if (!entry) return { groq: null, gemini: null };
+  if (!entry) return { groq: null, gemini: null, openai: null };
   const unwrap = (enc) => {
     if (!enc) return null;
     try { return decrypt(enc); } catch { return null; }
@@ -22,6 +21,7 @@ export function getUserKeys(userId) {
   return {
     groq: unwrap(entry.groq),
     gemini: unwrap(entry.gemini),
+    openai: unwrap(entry.openai),
   };
 }
 
@@ -33,23 +33,15 @@ export function setUserKey(userId, provider, rawKey) {
 }
 
 /**
- * Key'i kaydeder VE hemen ardından tüm modelleri test edip
- * çalışanları data/ai-models.json'a kaydeder.
- * Circular import riskini önlemek için dynamic import kullanır.
- *
- * Dönüş: { success, working?, total?, error? }
+ * Key'i kaydeder + hemen ardından tüm modelleri test eder.
+ * Circular import riskini dynamic import ile çözer.
  */
 export async function setUserKeyAndDiscover(userId, provider, rawKey) {
-  // 1. Önce key'i güvenli şekilde kaydet
   setUserKey(userId, provider, rawKey);
-
-  // 2. Sonra model keşfini çalıştır (dynamic import → circular yok)
   try {
     const { discoverAndSaveModels } = await import('./aiChatRunner.js');
-    const result = await discoverAndSaveModels(userId, provider, rawKey);
-    return result;
+    return await discoverAndSaveModels(userId, provider, rawKey);
   } catch (err) {
-    // Keşif başarısız olsa bile key kaydedildi — kullanıcıya bilgi ver
     return {
       success: false,
       error: `Model keşfi başlatılamadı: ${err.message}`,
@@ -66,17 +58,12 @@ export function clearUserKey(userId, provider) {
   }
 }
 
-/**
- * Kullanıcının TÜM key'lerini sil + model deposundan da temizle.
- */
 export async function clearAllUserKeys(userId) {
   const store = readStore();
   if (store[userId]) {
     delete store[userId];
     writeModuleJson(FILE, store);
   }
-  // Model deposundan kullanıcının çalışan modellerini temizleme gerek yok —
-  // modeller provider'a göre global tutuluyor (aynı provider = aynı liste).
 }
 
 // ── Key geçerlilik testi ────────────────────────────────────────────────
@@ -109,12 +96,26 @@ export async function validateGeminiKey(key) {
   }
 }
 
-/** Provider'a göre test eder */
-export async function validateKey(provider, key) {
-  return provider === 'groq' ? validateGroqKey(key) : validateGeminiKey(key);
+export async function validateOpenAIKey(key) {
+  try {
+    const res = await fetch('https://api.openai.com/v1/models', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.status === 401) return { ok: false, reason: 'Key geçersiz (401)' };
+    if (!res.ok) return { ok: false, reason: `API hatası ${res.status}` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: 'Bağlantı hatası: ' + err.message };
+  }
 }
 
-/** Maskelenmiş gösterim: gsk_a…bc1234 */
+export async function validateKey(provider, key) {
+  if (provider === 'groq') return validateGroqKey(key);
+  if (provider === 'gemini') return validateGeminiKey(key);
+  return validateOpenAIKey(key);
+}
+
 export function maskKey(key) {
   if (!key) return '—';
   if (key.length <= 12) return '••••••';
