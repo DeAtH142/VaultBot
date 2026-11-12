@@ -1,4 +1,4 @@
-// src/commands/voiceafk.js — 🌙 Özel AFK & Ses Sistemi (Sunucu + DM Ses v3)
+// src/commands/voiceafk.js — 🌙 Özel AFK & Ses Sistemi (Per-User + DM Ses v4)
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -46,7 +46,7 @@ const store = {
   },
 };
 
-// 🔑 DM sesleri için sentinel guild ID — runner bunu görünce DM moduna geçer
+// 🔑 DM sesleri için sentinel guild ID
 const DM_GUILD = '@me';
 
 function isRunning(userId, idx) {
@@ -56,7 +56,6 @@ function accountName(tokens, idx) {
   const t = tokens[idx];
   return t?.username || t?.label || `Hesap #${idx + 1}`;
 }
-
 const FOOTER = () => BRAND.footer('Secure Voice Engine');
 
 export default {
@@ -71,7 +70,9 @@ export default {
     });
   },
 
-  // ── Buton Etkileşimleri ──────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  // BUTONLAR — HEPSİ EPHEMERAL (paylaşılan panel bozulmaz)
+  // ══════════════════════════════════════════════════════════════════
   async onButton(interaction, actionParts) {
     const action = actionParts[0];
     const userId = interaction.user.id;
@@ -92,6 +93,7 @@ export default {
         .setDescription([
           `> ${E?.check ?? '✅'} **Bağlı hesaplar menüde işaretli**`,
           '> Bir hesap seçince **Sunucu + Ses Kanalı** formu açılacak.',
+          '> ⚠️ Bu menü **sadece size özel** — diğer kullanıcılar görmez.',
           '',
           DIVIDER,
         ].join('\n'));
@@ -164,7 +166,7 @@ export default {
 
       if (idxs.length === 0) {
         return interaction.reply({
-          content: '📭 Bağlı veya yapılandırılmış hesabınız yok.',
+          content: '📭 **Sizin** vault\'unuzda bağlı veya yapılandırılmış hesap yok.',
           ephemeral: true,
         });
       }
@@ -189,7 +191,7 @@ export default {
       );
 
       return interaction.reply({
-        content: '🛑 **Kaldırmak istediğin hesabı seç:**',
+        content: '🛑 **Sadece sizin hesabınız kaldırılacak:**',
         components: [row],
         ephemeral: true,
       });
@@ -203,7 +205,7 @@ export default {
 
       if (idxs.length === 0) {
         return interaction.reply({
-          content: '📭 Henüz aktif veya kayıtlı ses bağlantınız yok.',
+          content: '📭 **Sizin** vault\'unuzda aktif veya kayıtlı ses bağlantınız yok.',
           ephemeral: true,
         });
       }
@@ -235,7 +237,7 @@ export default {
       }).join('\n\n');
 
       const embed = new EmbedBuilder()
-        .setTitle('📊 Ses AFK Durum Raporu')
+        .setTitle('📊 Ses AFK Durum Raporu — Sadece Sizin')
         .setColor(COLORS.vault ?? 0x5865f2)
         .setDescription(lines)
         .setFooter(FOOTER())
@@ -244,28 +246,47 @@ export default {
       return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
-    // 🛑 Tümünü durdur
+    // 🛑 TÜMÜNÜ DURDUR — SADECE BUTONA BASAN KULLANICI
     if (action === 'tumukaldir' || action === 'tumukaldır') {
-      let stopped = 0;
-      tokens.forEach((_, i) => {
-        try { if (stopVoiceAfk(userId, i).success) stopped++; } catch {}
-      });
-      return interaction.update({
-        content: [
-          `🛑 **${stopped}** hesap ses kanalından çıkarıldı.`,
-          `> 💡 Yapılandırmalar korundu — \`Yeniden Başlat\` ile geri bağlayabilirsiniz.`,
-        ].join('\n'),
-        components: [],
-      });
+      const stoppedNames = [];
+      const failedNames = [];
+
+      // getTokens(userId) zaten yukarıda — sadece bu kullanıcının hesapları
+      for (let i = 0; i < tokens.length; i++) {
+        if (!isRunning(userId, i)) continue;
+        try {
+          const res = stopVoiceAfk(userId, i);
+          if (res?.success) stoppedNames.push(accountName(tokens, i));
+          else failedNames.push(accountName(tokens, i));
+        } catch (e) {
+          failedNames.push(accountName(tokens, i));
+        }
+      }
+
+      const lines = [];
+      if (stoppedNames.length > 0) {
+        lines.push(`🛑 **Sizin vault'unuzdaki ${stoppedNames.length} hesap durduruldu:**`);
+        stoppedNames.forEach(n => lines.push(`> • ${n}`));
+      } else {
+        lines.push('📭 **Sizin** vault\'unuzda zaten bağlı hesap yoktu.');
+      }
+      if (failedNames.length > 0) {
+        lines.push('', `⚠️ Durdurulamayanlar: ${failedNames.join(', ')}`);
+      }
+      lines.push('', `> 🔒 **Diğer kullanıcılara dokunulmadı.**`);
+      lines.push(`> 💡 Yapılandırmalar korundu — \`🔄 Yeniden Başlat\` ile geri bağlayabilirsiniz.`);
+
+      // ⚠️ interaction.update DEĞİL — shared panel bozulmasın
+      return interaction.reply({ content: lines.join('\n'), ephemeral: true });
     }
 
-    // 🔄 Yeniden başlat
+    // 🔄 Yeniden başlat — sadece kendi configleri
     if (action === 'restart') {
       await interaction.deferReply({ ephemeral: true });
       const configs = store.list(userId);
       if (configs.length === 0) {
         return interaction.editReply({
-          content: '📭 Yeniden başlatılacak kayıtlı yapılandırma bulunamadı.',
+          content: '📭 **Sizin** vault\'unuzda yeniden başlatılacak yapılandırma bulunamadı.',
         });
       }
 
@@ -289,7 +310,7 @@ export default {
       }
 
       const embed = new EmbedBuilder()
-        .setTitle('🔄 Ses AFK Yeniden Başlatma')
+        .setTitle(`🔄 Yeniden Başlatma — Sadece Sizin (${started}/${configs.length})`)
         .setColor(started > 0 ? (COLORS.success ?? 0x2ecc71) : (COLORS.danger ?? 0xed4245))
         .setDescription([`\`${THIN_DIVIDER}\``, ...results, `\`${THIN_DIVIDER}\``].join('\n'))
         .setFooter(FOOTER())
@@ -299,7 +320,9 @@ export default {
     }
   },
 
-  // ── Menü Seçimleri ───────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  // MENÜ SEÇİMLERİ
+  // ══════════════════════════════════════════════════════════════════
   async onSelect(interaction, actionParts) {
     const action = actionParts[0];
     const userId = interaction.user.id;
@@ -369,16 +392,19 @@ export default {
       try { stopped = stopVoiceAfk(userId, idx).success; } catch {}
       store.del(userId, idx);
 
+      // Menü zaten ephemeral — update OK (sadece bu kullanıcının gördüğü mesaj)
       return interaction.update({
         content: stopped
-          ? `✅ Hesap #${idx + 1} bağlantısı kesildi ve yapılandırma silindi.`
+          ? `✅ **${accountName(getTokens(userId), idx)}** durduruldu ve yapılandırma silindi.`
           : `⭕ Hesap #${idx + 1} zaten bağlı değildi. Yapılandırma temizlendi.`,
         components: [],
       });
     }
   },
 
-  // ── Modal Yanıtları ─────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════
+  // MODAL YANITLARI
+  // ══════════════════════════════════════════════════════════════════
   async onModalSubmit(interaction, actionParts) {
     const userId = interaction.user.id;
 
@@ -412,7 +438,7 @@ export default {
           `> 🔁 **Yeniden Deneme:** \`10/kanal\``,
           `> 🔒 **Şifreleme:** \`AES-256-GCM\``,
           '',
-          `> Koparsa otomatik geri bağlanır (10 deneme limitiyle).`,
+          `> ⚠️ **Bu sadece sizin hesabınız** — diğer kullanıcılar etkilenmedi.`,
           `\`${THIN_DIVIDER}\``,
         ].join('\n'))
         .setFooter(FOOTER())
@@ -449,7 +475,7 @@ export default {
           `> 🔁 **Yeniden Deneme:** \`10/kanal\``,
           `> 🔒 **Şifreleme:** \`AES-256-GCM\``,
           '',
-          `> Grup DM ses aramasına bağlandı. Koparsa otomatik geri bağlanır.`,
+          `> ⚠️ **Bu sadece sizin hesabınız** — diğer kullanıcılar etkilenmedi.`,
           `\`${THIN_DIVIDER}\``,
         ].join('\n'))
         .setFooter(FOOTER())
@@ -469,27 +495,27 @@ export function createMainEmbed(client) {
     .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
     .setDescription([
       UX.header,
-      `*${UX.arrow} Sunucu sesi + DM sesi tek panelde*`,
+      `*${UX.arrow} Sunucu sesi + DM sesi tek panelde — herkes kendi hesabını yönetir*`,
       UX.footerLine,
       '',
       statusLine([
         ['🎙️', 'Sunucu Ses', 'Guild + Kanal'],
         ['💬', 'DM Ses', 'Sadece Kanal ID'],
-        ['🔒', 'Şifreleme', 'AES-256-GCM'],
+        ['👤', 'Kapsam', 'Sadece Siz'],
       ]),
       '',
       section('Nasıl Çalışır?'),
-      `> ${UX.dot2} 🎙️ **Havuzdan Hesap Seç** — Sunucu ses kanalına bağlan`,
-      `> ${UX.dot2} 💬 **DM Sese Gir** — Grup DM aramalarına bağlan (sadece kanal ID)`,
-      `> ${UX.dot2} Kanal bulunamazsa **10 kez** arar, sonra bırakır`,
-      `> ${UX.dot2} Koparsa otomatik geri bağlanır`,
+      `> ${UX.dot2} 🎙️ **Havuzdan Hesap Seç** — Kendi hesabını sunucu sesine bağla`,
+      `> ${UX.dot2} 💬 **DM Sese Gir** — Kendi hesabını DM aramasına bağla`,
+      `> ${UX.dot2} ⚠️ Her kullanıcı **sadece kendi vault'unu** görür ve yönetir`,
+      `> ${UX.dot2} 🛑 **Tümünü Durdur** sadece **sizin** hesaplarınızı durdurur`,
       '',
       section('Kontrol Paneli'),
       `> ${UX.dot2} 👤 **Hesap Seç** — Sunucu ses kanalına bağla`,
       `> ${UX.dot2} 💬 **DM Sese Gir** — DM aramasına bağla`,
       `> ${UX.dot2} 🗑️ **Hesap Kaldır** — Belirli hesabı durdur`,
-      `> ${UX.dot2} 📊 **Durum Raporu** — Canlı istatistikler`,
-      `> ${UX.dot2} 🔄 **Yeniden Başlat** — Kayıtlı tüm hesapları tekrar bağla`,
+      `> ${UX.dot2} 📊 **Durum Raporu** — Sizin canlı istatistikler`,
+      `> ${UX.dot2} 🔄 **Yeniden Başlat** — Kayıtlı hesaplarınızı tekrar bağla`,
     ].join('\n'))
     .setFooter(FOOTER())
     .setTimestamp();
