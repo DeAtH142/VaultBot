@@ -1,6 +1,8 @@
 name: VaultBot 7-24
 
 on:
+  schedule:
+    - cron: '0 */5 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -28,6 +30,11 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT=${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           EOF
+      - name: Firebase'den verileri cek (Pull)
+        working-directory: ./discord-bot
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/cloud-sync.js pull
       - name: Botu calistir
         working-directory: ./discord-bot
         env:
