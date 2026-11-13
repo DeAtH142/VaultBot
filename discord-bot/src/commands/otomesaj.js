@@ -6,6 +6,7 @@ import { getTokens } from '../utils/tokenStore.js';
 import {
   startScheduledJob, stopScheduledJob, getScheduledJobs, getJobState, isJobRunning,
 } from '../utils/scheduledMessenger.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Scheduled Post Engine');
 
@@ -132,6 +133,7 @@ export default {
     if (action[0] === 'durdursec') {
       const idx = Number(interaction.values[0]);
       const ok = stopScheduledJob(interaction.user.id, idx);
+      if (ok) markStop(interaction.user.id, 'otomesaj', idx); // ⏱️
       return interaction.update({ content: ok ? `⏹️ Hesap #${idx + 1} görevi durduruldu.` : '❌ Görev bulunamadı.', components: [] });
     }
   },
@@ -150,6 +152,7 @@ export default {
     await interaction.deferReply({ ephemeral: true });
     try {
       await startScheduledJob(interaction.user.id, idx, { channelId, intervalMinutes, messages });
+      markStart(interaction.user.id, 'otomesaj', idx); // ⏱️
       const state = getJobState(interaction.user.id, idx);
       const embed = new EmbedBuilder()
         .setTitle('🕐 Oto Mesaj Görevi Başlatıldı')

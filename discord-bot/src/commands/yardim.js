@@ -70,6 +70,17 @@ const SECTIONS = [
     ],
   },
   {
+    title: '⏱️ Süre & Rol İlerlemesi',
+    emoji: '⏱️',
+    desc: 'Aktif kullanım süreni ve rollerini takip eder.',
+    lines: [
+      ['`!surem`', '`sürem`, `playtime`, `ilerleme`', '**Kişisel ilerleme kartı** — Aktif sistemlerken geçen birleşik süre, sıradaki role kalan süre, rol geçmişi. Birden fazla sistem aynı anda açıksa süre **tek kez** sayılır.'],
+      ['`!surem panel`', '—', 'Butonlu detaylı panel: anlık durum yenileme, canlı sistemler, rol yol haritası.'],
+      ['`!surem roller`', '`tiers`, `roadmap`', '10 aşamalı rol hedefi tablosu (5 → 35 sa ek süre, toplam 196 sa).'],
+      ['`!surem kurallar`', '`rules`', 'Sistemin kuralları: gerçek başlangıç, birleşim hesabı, bot kapalıyken süre sayılmaması.'],
+    ],
+  },
+  {
     title: 'ℹ️ Genel Komutlar',
     emoji: 'ℹ️',
     desc: 'Yardım ve sistem bilgisi.',
@@ -120,6 +131,7 @@ export default {
         `> ${E.check} Hesap eklemek için önce \`!hesaplarim\` → **Token Ekle**`,
         `> ${E.check} Panellerde alt taraftaki butonlarla işlem yapılır`,
         `> ${E.check} Bot kapansa bile oturumlar **Reboot Recovery** ile geri gelir`,
+        `> ${E.clock} Süre ilerlemen **Firestore'da** tutulur — \`!surem\` ile takip et`,
         `> ⚠️ \`!template\` komutu sunucuyu komple sıfırlar — dikkat!`,
       ].join('\n'),
     });

@@ -24,6 +24,7 @@ import {
   getLastSessionReport,
 } from '../utils/owoRunner.js';
 import { COLORS, E, DIVIDER, errorEmbed } from '../utils/embeds.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 // ── Para/W Ayar Parser ────────────────────────────────────────────────
 // Format: "para:75,5000,50 w:200,100"
@@ -204,7 +205,10 @@ export default {
         cfg.enabled = true;
         saveOwoConfig(interaction.user.id, cfg.tokenIndex, cfg);
         const res = await startOwoAutomation(interaction.user.id, cfg.tokenIndex);
-        if (res.success) started++;
+        if (res.success) {
+          started++;
+          markStart(interaction.user.id, 'owo', cfg.tokenIndex); // ⏱️
+        }
       }
       await interaction.editReply({
         content: `🔄 **${started} adet** hesap otomasyonu başarıyla yeniden başlatıldı!`,
@@ -280,6 +284,7 @@ export default {
       const tokenIndex = parseInt(interaction.values[0], 10);
       stopOwoAutomation(interaction.user.id, tokenIndex);
       deleteOwoConfig(interaction.user.id, tokenIndex);
+      markStop(interaction.user.id, 'owo', tokenIndex); // ⏱️
       await interaction.update({
         content: `✅ Hesap #${tokenIndex + 1} otomasyondan kaldırıldı ve durduruldu.`,
         components: [],
@@ -356,6 +361,8 @@ export default {
         embeds: [errorEmbed(`Otomasyon başlatılamadı:\n\`${res.error}\``)],
       });
     }
+
+    markStart(interaction.user.id, 'owo', tokenIndex); // ⏱️ süre başarıyla açılır
 
     // 4) Rapor
     const paraInfo = paraAyar.para

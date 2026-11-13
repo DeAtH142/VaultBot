@@ -10,6 +10,7 @@ import {
   startSpotifyPresence, stopSpotifyPresence, stopAllSpotify, searchTrack,
 } from '../utils/spotifyPresenceRunner.js';
 import { COLORS, THIN_DIVIDER, BRAND, UX, section, statusLine } from '../utils/embeds.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Spotify Fake Presence Engine');
 // Kullanıcı başına arama sonuçlarının geçici saklandığı yer
@@ -127,6 +128,7 @@ export default {
 
       await interaction.deferUpdate();
       const res = await startSpotifyPresence(userId, idx, track, { statusChoice: pending?.statusChoice || 'online' });
+      if (res.success) markStart(userId, 'spotify', idx); // ⏱️
       const embed = new EmbedBuilder()
         .setTitle(res.success ? '🎧 Presence Aktif!' : '❌ Başlatılamadı')
         .setColor(res.success ? 0x1db954 : COLORS.danger)
@@ -149,7 +151,9 @@ export default {
     }
 
     if (action === 'hepsini-kapat' || action === 'hepsini_kapat') {
+      const running = listRunningSpotify(userId);
       const n = stopAllSpotify(userId);
+      for (const s of running) markStop(userId, 'spotify', s.tokenIndex); // ⏱️
       return interaction.reply({ content: `💀 Tüm Spotify presence'ları kapatıldı (**${n}** adet).`, ephemeral: true });
     }
 
@@ -194,6 +198,7 @@ export default {
     if (action === 'durdursec') {
       const idx = Number(interaction.values[0]);
       const ok = stopSpotifyPresence(userId, idx);
+      if (ok) markStop(userId, 'spotify', idx); // ⏱️
       return interaction.update({
         content: ok ? `🛑 Hesap #${idx + 1} Spotify presence kapatıldı.` : '❌ Oturum bulunamadı.',
         components: [],

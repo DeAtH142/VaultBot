@@ -12,6 +12,7 @@ import {
 import { getTokens, updateTokenStatus } from '../utils/tokenStore.js';
 import { setAccountPresence, stopAccountSession, isAccountSessionActive } from '../utils/accountManager.js';
 import { createOnlineSystemEmbed, createOnlineSystemComponents, COLORS } from '../utils/embeds.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 export default {
   name: 'online',
@@ -46,6 +47,8 @@ export default {
 
       if (res.success) {
         updateTokenStatus(interaction.user.id, tokenIndex, status);
+        // ⏱️ Süre motoru: yalnızca gerçek başarı sonrası oturum açılır
+        markStart(interaction.user.id, 'online', tokenIndex);
         await interaction.editReply({
           content: `🟢 **${token.username || token.label || 'Hesap'}** — durum \`${status}\` olarak ayarlandı.`,
         });
@@ -64,6 +67,7 @@ export default {
 
       stopAccountSession(interaction.user.id, tokenIndex);
       updateTokenStatus(interaction.user.id, tokenIndex, 'pasif');
+      markStop(interaction.user.id, 'online', tokenIndex); // ⏱️
 
       await interaction.reply({
         content: `🛑 **${token?.username || token?.label || 'Hesap'}** oturumu kapatıldı.`,
@@ -230,6 +234,7 @@ export default {
       const tokenIndex = parseInt(interaction.values[0], 10);
       stopAccountSession(interaction.user.id, tokenIndex);
       updateTokenStatus(interaction.user.id, tokenIndex, 'pasif');
+      markStop(interaction.user.id, 'online', tokenIndex); // ⏱️
 
       const tokens = getTokens(interaction.user.id);
       const token = tokens[tokenIndex];
@@ -282,6 +287,7 @@ export default {
 
     // Token verisini ve durumunu güncelle
     updateTokenStatus(interaction.user.id, tokenIndex, selectedStatus);
+    markStart(interaction.user.id, 'online', tokenIndex); // ⏱️ süre gerçek başarıyla açılır
 
     // Screenshot 3 Tasarımı:
     // 🟢 Online Sistemi Başlatıldı

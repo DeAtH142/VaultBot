@@ -20,8 +20,12 @@ import { recoverScenarios } from './utils/scenarioRunner.js';
 import { recoverStreamerPresences } from './utils/streamerPresenceRunner.js';
 import { recoverBotKeeper } from './utils/botKeeperRunner.js';
 import { pullFromCloud, pushToCloud, startPeriodicPush, isCloudEnabled } from './utils/cloudStore.js';
+import { reconcileOnBoot, heartbeat, closeAllOnShutdown, fmtHours, getPlaytimeUsers } from './utils/playtimeStore.js';
+import { resetLiveKeys, syncUser, listTrackedUsers, processPendingAwards } from './utils/playtimeHooks.js';
 
 dotenv.config();
+
+let playtimeStarted = false; // süre motoru interval'ları tek kez başlasın
 
 // ── Tek-instance kilidi ─────────────────────────────────────────
 // Aynı token ile iki bot aynı anda çalışırsa Discord etkileşimleri iki process
@@ -106,6 +110,7 @@ const CUSTOM_ID_ROUTES = {
   boostcheck: 'boostcheck',         // Boost Kontrol paneli
   template: 'template',             // Pro Sunucu Template paneli
   mobil: 'mobil',                   // Mobil Status paneli
+  surem: 'surem',                   // ⏱️ Süre & Rol İlerleme paneli
   mcafk: 'mcafk',                   // Minecraft AFK paneli
   spotify: 'spotify',               // Spotify Fake Presence paneli
 };
@@ -129,6 +134,21 @@ client.once('ready', () => {
   // Bulut senkronu (GitHub Actions / ephemeral ortamlarda kalıcılık sağlar)
   startPeriodicPush();
 
+  // ⏱️ Süre motoru: bot kapalıyken geçen süre sayılmasın diye önceki oturumlar
+  // canlılık damgası (lastSeen) anında kesilir; sonra recovery'ler çalışır.
+  try {
+    resetLiveKeys(); // modüller kendini yeniden register edecek
+    const rec = reconcileOnBoot();
+    if (rec.reports.length > 0) {
+      const total = rec.reports.reduce((a, r) => a + r.seconds, 0);
+      console.log(`⏱️ [Playtime] ${rec.reports.length} kullanıcı için ${fmtHours(total)} birikim işlendi.`);
+    }
+    console.log(`⏱️ [Playtime] Boot tamam — ${rec.closedCount} oturum kapatıldı.`);
+    startPlaytimeEngine();
+  } catch (err) {
+    console.error('⏱️ [Playtime] Boot hatası:', err.message);
+  }
+
   // Reboot Recovery
   recoverAllOwoWorkers().catch(console.error);
   recoverOnlineSessions().catch(console.error);
@@ -144,6 +164,14 @@ client.once('ready', () => {
   recoverScenarios().catch(console.error);
   recoverStreamerPresences().catch(console.error);
   recoverBotKeeper().catch(console.error);
+
+  // Recovery başladıktan sonra canlı sistemleri süre motoruna kaydet
+  setTimeout(registerExistingSessions, 10 * 1000);
+
+  // 🎖️ Bot kapalıyken verilemeyen roller varsa şimdi tekrar dene
+  setTimeout(() => {
+    processPendingAwards().catch(err => console.error('[Playtime] Bekleyen rol dağıtımı hatası:', err.message));
+  }, 15 * 1000);
 });
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
@@ -217,9 +245,52 @@ if (isCloudEnabled()) {
   client.login(process.env.DISCORD_TOKEN);
 }
 
+// ── ⏱️ Süre motoru: heartbeat + periyodik tutarlılık senkronu ─────────────
+function startPlaytimeEngine() {
+  if (playtimeStarted) return;
+  playtimeStarted = true;
+
+  // 30 sn'de bir: canlı oturumların lastSeen damgasını tazele.
+  // Bot bir anda ölürse, kaydedilen son damga dışında süre asla eklenmez.
+  setInterval(() => {
+    try { heartbeat(); } catch (err) { console.error('[Playtime] heartbeat hatası:', err.message); }
+  }, 30 * 1000);
+
+  // 60 sn'de bir: modüller gerçekten çalışıyor mu? (ölü sayaçları kapat)
+  setInterval(() => {
+    try {
+      const users = new Set(listTrackedUsers());
+      for (const userId of users) syncUser(userId);
+    } catch (err) {
+      console.error('[Playtime] senkron hatası:', err.message);
+    }
+  }, 60 * 1000);
+
+  // 45 sn'de bir: kayıtlı kullanıcıları yeniden senkronla (fallback)
+  setTimeout(() => {
+    try { registerExistingSessions(); } catch (err) { console.error('[Playtime] ilk senkron hatası:', err.message); }
+  }, 45 * 1000);
+}
+
+/** Reboot recovery bittikten sonra gerçekten çalışan modülleri kayıt altına al */
+function registerExistingSessions() {
+  try {
+    const users = getPlaytimeUsers();
+    let active = 0;
+    for (const userId of users) {
+      const res = syncUser(userId);
+      active += res.active.length;
+    }
+    if (active > 0) console.log(`⏱️ [Playtime] ${active} canlı sistem süre motoruna kaydedildi.`);
+  } catch (err) {
+    console.error('[Playtime] recovery kayıt hatası:', err.message);
+  }
+}
+
 // ── Graceful shutdown: çıkarken son durumu buluta yaz ──────────────────
 async function gracefulShutdown(reason) {
   console.log(`\n🛑 Bot kapatılıyor (${reason})...`);
+  try { closeAllOnShutdown(); } catch (err) { console.error('[Playtime] Kapanış hatası:', err.message); }
   try { if (isCloudEnabled()) await pushToCloud(); } catch (err) { console.error('[CloudStore] Kapanış senkronu hatası:', err.message); }
   process.exit(0);
 }

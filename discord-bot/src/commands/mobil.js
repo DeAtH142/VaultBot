@@ -12,6 +12,7 @@ import {
   getUserMobileStatusSessions, getMobileStatusStats,
 } from '../utils/mobileStatusRunner.js';
 import { COLORS, errorEmbed, BRAND, UX, section, bullet, statusLine, THIN_DIVIDER } from '../utils/embeds.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Mobil Status Engine');
 
@@ -267,6 +268,7 @@ export default {
     if (action === 'durduronay') {
       const tokenIndex = parseInt(interaction.values[0], 10);
       stopMobileStatus(userId, tokenIndex);
+      markStop(userId, 'mobil', tokenIndex); // ⏱️
       await interaction.update({
         content: `✅ **Hesap #${tokenIndex + 1} mobil oturumu kapatıldı.**\n> Hesap artık çevrimdışı görünür. Yeniden bağlamak için \`🚀 Hızlı Kurulum\`.`,
         components: [],
@@ -290,6 +292,7 @@ export default {
     }
 
     const res = await startMobileStatus(userId, tokenIndex, t, chosenStatus, customStatus);
+    if (res.success) markStart(userId, 'mobil', tokenIndex); // ⏱️
     if (!res.success) {
       return interaction.editReply({ embeds: [errorEmbed(`Mobil bağlantı kurulamadı:\n\`${res.error}\`\n\n**Çözüm önerileri:**\n> • Token geçersiz olabilir → \`!hesaplarim\` → Denetle\n> • İnternet bağlantını kontrol et\n> • 1-2 dakika sonra tekrar dene`)] });
     }

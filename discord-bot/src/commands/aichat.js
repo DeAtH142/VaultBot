@@ -20,6 +20,7 @@ const removeAiConfig = typeof aiRunner.removeAiConfig === 'function'
 import {
   getUserKeys, setUserKeyAndDiscover, clearUserKey, validateKey, maskKey,
 } from '../utils/aiKeyStore.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('AI Conversation Engine');
 
@@ -307,6 +308,7 @@ export default {
     if (action === 'durdursec') {
       const idx = Number(interaction.values[0]);
       const ok = stopAiChat(userId, idx);
+      if (ok) markStop(userId, 'aichat', idx); // ⏱️
       return interaction.update({
         content: ok ? `⏹️ Hesap #${idx + 1} AI chat durduruldu.` : '❌ Görev bulunamadı.',
         components: [],
@@ -316,7 +318,7 @@ export default {
     if (action === 'silsec') {
       const idx = Number(interaction.values[0]);
       const wasRunning = isAiRunning(userId, idx);
-      try { if (wasRunning) stopAiChat(userId, idx); } catch {}
+      try { if (wasRunning) { stopAiChat(userId, idx); markStop(userId, 'aichat', idx); } } catch {}
       let removed = false;
       try { removed = removeAiConfig(userId, idx); } catch { removed = false; }
       return interaction.update({
@@ -528,6 +530,7 @@ export default {
         provider,
         model,
       });
+      markStart(interaction.user.id, 'aichat', idx); // ⏱️
       const embed = new EmbedBuilder()
         .setTitle('🤖 AI Chat Başlatıldı')
         .setColor(COLORS.success)

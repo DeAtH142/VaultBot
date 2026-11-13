@@ -9,6 +9,7 @@ import {
   getAutoTyperStats, getAllAutoTyperSessions,
 } from '../utils/autoTyperRunner.js';
 import { COLORS, E, THIN_DIVIDER, errorEmbed, BRAND, UX, section, bullet, statusLine } from '../utils/embeds.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('AutoTyper Engine');
 
@@ -108,7 +109,10 @@ export default {
       const sessions = getAllAutoTyperSessions().filter(s => s.userId === interaction.user.id);
       let stopped = 0;
       for (const s of sessions) {
-        if (stopAutoTyper(s.userId, s.tokenIndex, { silent: true })) stopped++;
+        if (stopAutoTyper(s.userId, s.tokenIndex, { silent: true })) {
+          stopped++;
+          markStop(s.userId, 'autotyper', s.tokenIndex); // ⏱️
+        }
       }
       return interaction.editReply({ content: `🛑 **${stopped} adet** AutoTyper oturumu durduruldu.` });
     }
@@ -137,6 +141,7 @@ export default {
     if (action === 'durduronay') {
       const tokenIndex = parseInt(interaction.values[0], 10);
       stopAutoTyper(interaction.user.id, tokenIndex);
+      markStop(interaction.user.id, 'autotyper', tokenIndex); // ⏱️
       await interaction.update({ content: `✅ Hesap #${tokenIndex + 1} AutoTyper oturumu durduruldu.`, components: [] });
     }
   },
@@ -156,6 +161,8 @@ export default {
     if (!res.success) {
       return interaction.editReply({ embeds: [errorEmbed(`AutoTyper başlatılamadı:\n\`${res.error}\``)] });
     }
+
+    markStart(interaction.user.id, 'autotyper', tokenIndex); // ⏱️
 
     const stats = getAutoTyperStats(interaction.user.id, tokenIndex);
     const embed = new EmbedBuilder()

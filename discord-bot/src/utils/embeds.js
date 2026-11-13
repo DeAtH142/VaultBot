@@ -284,3 +284,176 @@ export function createOnlineSystemComponents() {
     ),
   ];
 }
+
+// ══════════════════════════════════════════════════
+// ⏱️  ROL İLERLEME / SÜRE PANELİ — PRO EMBED SETİ
+// ══════════════════════════
+
+import { ROLE_TIERS, fmtHours, fmtTimer } from './playtimeStore.js';
+import { sourceMeta } from './playtimeHooks.js';
+
+/** ▰▰▰▱▱▱ tarzı parlak ilerleme çubuğu */
+export function proBar(pct, length = 14) {
+  const p = Math.max(0, Math.min(100, Number(pct) || 0));
+  const filled = Math.round((p / 100) * length);
+  return `${'▰'.repeat(filled)}${'▱'.repeat(length - filled)}`;
+}
+
+const TIER_MEDALS = ['🥉', '🥈', '🥇', '💠', '🔷', '🔶', '🌟', '👑', '🔥', '🏆'];
+
+export function tierBadge(tier) {
+  if (!tier) return '⬜ **Ünvan yok**';
+  return `${TIER_MEDALS[tier - 1] || '🏅'} **${tier}. ROL — ${ROLE_TIERS[tier - 1]?.name || ''}**`;
+}
+
+/** Canlı sistem listesi satırları */
+function liveSystemsText(progress) {
+  if (!progress.live) return '> `⚫` *Şu anda süre sayılmıyor*';
+  const now = Date.now();
+  return progress.liveSessions
+    .map(s => {
+      const meta = sourceMeta(s.key.split(':')[0]);
+      return `> ${meta.emoji} **${meta.label}** · \`${fmtTimer((now - s.start) / 1000)}\``;
+    })
+    .join('\n');
+}
+
+/**
+ * 🎖️ Ana ilerleme paneli
+ */
+export function createProgressEmbed(user, progress, extra = {}) {
+  const {
+    tierIndex, tierCount, nextTier, currentTier,
+    cumulativeSec, requiredSec, remainingSec, progressPct,
+    totalSec, lastPlayedAt, lastAward, pendingAwards,
+  } = progress;
+
+  const startedAt = progress.liveSessions.length
+    ? Math.min(...progress.liveSessions.map(s => s.start))
+    : null;
+
+  const headerRight = progress.live
+    ? `🔴 **SÜRE AKIYOR** · \`${fmtTimer((Date.now() - startedAt) / 1000)}\``
+    : '⚫ **BEKLEMEDE**';
+
+  const lines = [
+    UX.header,
+    `${statusLine([
+      [progress.live ? E.online : E.offline, 'DURUM', progress.live ? 'AKTİF' : 'PASİF'],
+      [E.clock, 'Oturumlar', String(progress.liveSessions.length)],
+      [E.trophy, 'ROL', `${tierIndex}/${tierCount}`],
+    ])}`,
+    UX.footerLine,
+    '',
+    `### ${headerRight}`,
+    `${E.lightning} **AKTİF SİSTEMLER**`,
+    liveSystemsText(progress),
+    '',
+    `${E.chart} **SIRADAKİ ROL İLERLEMESİ**`,
+    `\`${proBar(progressPct, 14)}\`  **\`${progressPct}%\`**`,
+    nextTier
+      ? [
+        `> ${UX.arrow} **Hedef:** ${tierBadge(nextTier.tier)}`,
+        `> ${UX.arrow} **Gereken (bu rol için):** \`${nextTier.requiredHours} sa\``,
+        `> ${UX.arrow} **Toplanan:** \`${fmtHours(cumulativeSec)}\` / \`${fmtHours(requiredSec)}\``,
+        `> ${UX.arrow} **Kalan:** \`${fmtHours(remainingSec)}\``,
+      ].join('\n')
+      : `> ${E.crown} **Tüm roller tamamlandı!** Tebrikler.`,
+    '',
+    `${E.clock} **KİŞİSEL KAYITLAR**`,
+    `> ${UX.dot2} **Şu anki ünvan:** ${tierBadge(currentTier?.tier)}`,
+    `> ${UX.dot2} **Toplam sayılan süre:** \`${fmtHours(totalSec)}\``,
+    `> ${UX.dot2} **Son görülme:** ${lastPlayedAt ? `<t:${Math.floor(new Date(lastPlayedAt).getTime() / 1000)}:R>` : '*Henüz yok*'}`,
+    lastAward ? `> ${UX.dot2} **Son ödül:** ${tierBadge(lastAward.tier)} — <t:${Math.floor(new Date(lastAward.at).getTime() / 1000)}:R>` : '',
+    pendingAwards?.length
+      ? `> ${E.warning} **Rol bekliyor:** ${pendingAwards.map(p => tierBadge(p.tier)).join(', ')}\n> ${UX.arrow} *\`!surem rolver\` ile hemen dene*`
+      : '',
+    extra.roleStatusLine || '',
+    '',
+    `*${THIN_DIVIDER}*`,
+    `> ${E.info} Süre yalnızca **uygun sistemler gerçekten çalışırken** sayılır. Aynı anda birden fazla ` +
+      `sistem açıksa aynı zaman aralığı **tek kez** hesaplanır (birleşim süresi).`,
+    `> ${E.warning} Bot kapalıyken geçen süre **sayılmaz**.`,
+    '',
+    `${E.target} *Yönetim paneli:* \`!surem panel\`  ·  *Komutlar:* \`!surem\``,
+  ].filter(Boolean);
+
+  return new EmbedBuilder()
+    .setAuthor({ name: `${BRAND.name} • Rol İlerleme Motoru ${BRAND.version}`, iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png' })
+    .setColor(progress.live ? COLORS.purple : COLORS.gray)
+    .setTitle(`${E.clock}  REXAL — SÜRE & ROL İLERLEMESİ`)
+    .setThumbnail(user?.displayAvatarURL ? user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
+    .setDescription(lines.join('\n'))
+    .setFooter(BRAND.footer('Birleşim süresi • Kalıcı kayıt'))
+    .setTimestamp();
+}
+
+/** 🪜 Rol eşik tablosu (tasarımdaki 10 aşamalı yol haritası) */
+export function createTierRoadmapEmbed(user, progress) {
+  const rows = ROLE_TIERS.map(t => {
+    const done = t.tier <= progress.tierIndex;
+    const active = t.tier === progress.tierIndex + 1;
+    const mark = done ? '✅' : active ? '⏳' : '🔒';
+    const medal = TIER_MEDALS[t.tier - 1] || '🏅';
+    const line = `> ${mark} ${medal} **${t.tier}. ${t.name}** · ek \`${t.requiredHours} sa\` · toplam \`${t.totalHours} sa\``;
+    return active
+      ? `${line}\n>　　　┗ ${proBar(progress.progressPct, 10)} \`${fmtHours(progress.cumulativeSec)} / ${t.requiredHours} sa\``
+      : line;
+  });
+
+  return new EmbedBuilder()
+    .setAuthor({ name: `${BRAND.name} • Rol Yol Haritası`, iconURL: user?.displayAvatarURL?.({ dynamic: true }) })
+    .setColor(COLORS.gold)
+    .setTitle(`${E.trophy}  REXAL — 10 AŞAMALI ROL HEDEFİ`)
+    .setDescription([
+      UX.header,
+      `> ${E.check} **Tamamlanan:** \`${progress.tierIndex}/${ROLE_TIERS.length}\`  ${E.chart} **Toplam süre:** \`${fmtHours(progress.totalSec)}\``,
+      UX.footerLine,
+      '',
+      '**Her rol, öncekinin üzerine EK süre ister.** Eşik dolunca sayaç sıfırdan başlar, ' +
+      'toplam ilerlemen ise her zaman korunur.',
+      '',
+      ...rows,
+      '',
+      `*Toplam hedef:* \`${ROLE_TIERS.reduce((a, t) => a + t.requiredHours, 0)} sa\` (10 rolün tamamı)`,
+    ].join('\n'))
+    .setFooter(BRAND.footer('Saniye hassasiyeti'))
+    .setTimestamp();
+}
+
+/** 📊 Komut yardım embed'i */
+export function createPlaytimeHelpEmbed() {
+  return new EmbedBuilder()
+    .setAuthor({ name: `${BRAND.name} • Süre Sistemi`, iconURL: 'https://cdn.discordapp.com/embed/avatars/0.png' })
+    .setColor(COLORS.purple)
+    .setTitle(`${E.clock}  !sürem — Komutlar`)
+    .setDescription([
+      UX.header,
+      `> ${UX.arrow} \`!surem\` — Kişisel ilerleme kartın`,
+      `> ${UX.arrow} \`!surem panel\` — Detaylı panel + butonlar`,
+      `> ${UX.arrow} \`!surem roller\` — 10 aşamalı rol yol haritası`,
+      `> ${UX.arrow} \`!surem canli\` — Bu kullanıcının canlı sistemleri`,
+      `> ${UX.arrow} \`!surem rolver\` — Bekleyen rolü hemen vermeyi dene`,
+      UX.footerLine,
+      '',
+      section('Nasıl Çalışır?'),
+      `${bullet(E.dot, 'Gerçek Başlangıç', 'Süre, panelde "başarılı" sonucu geldiği an açılır')}`,
+      `${bullet(E.dot, 'Tek Sayaç', 'Birden fazla sistem açık olsa da süre ikinci kez sayılmaz')}`,
+      `${bullet(E.dot, 'Kalıcı Kayıt', 'Bot kapansa da ilerleme Firestore\'da korunur')}`,
+      `${bullet(E.dot, 'Bot Kapalı = Süre Yok', 'Canlılık damgası sayesinde offline süre asla eklenmez')}`,
+    ].join('\n'))
+    .setFooter(BRAND.footer('REXAL Time Engine'))
+    .setTimestamp();
+}
+
+/** Panel butonları */
+export function createProgressComponents() {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('surem:refresh').setLabel('Durumu Yenile').setEmoji('🔄').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('surem:roller').setLabel('Rol Yol Haritası').setEmoji('🪜').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('surem:canli').setLabel('Canlı Sistemler').setEmoji('📡').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('surem:kurallar').setLabel('Kurallar').setEmoji('📖').setStyle(ButtonStyle.Secondary),
+    ),
+  ];
+}

@@ -28,6 +28,7 @@ export const SYNC_FILES = [
   'mc_afk.json',
   'event_listeners.json',
   'ai_keys.json',
+  'playtime.json', // ⏱️ rol ilerlemesi — bot kapansa da kaybolmamalı
 ];
 
 let firestoreDb = null;

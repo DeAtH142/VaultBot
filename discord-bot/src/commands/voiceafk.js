@@ -13,6 +13,7 @@ import {
   COLORS, THIN_DIVIDER, BRAND, UX, E, DIVIDER,
   section, statusLine, errorEmbed,
 } from '../utils/embeds.js';
+import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 // ── Kalıcı config deposu (kullanıcı bazlı) ────────────────────────────
 const CONFIG_FILE = path.resolve('data/voiceafk-configs.json');
@@ -361,6 +362,20 @@ export default {
       return interaction.showModal(modal);
     }
 
+    if (action === 'tumukaldır' || action === 'tumukaldir') {
+      let stopped = 0;
+      tokens.forEach((_, i) => {
+        if (stopVoiceAfk(userId, i).success) {
+          stopped++;
+          markStop(userId, 'voiceafk', i); // ⏱️
+        }
+      });
+      return interaction.update({
+        content: `🛑 **${stopped}** hesap ses kanalından çıkarıldı.`,
+        components: [],
+      });
+    }
+
     if (action === 'dmayari') {
       const idx = parseInt(interaction.values[0], 10);
       const tokens = getTokens(userId);
@@ -427,6 +442,8 @@ export default {
         });
       }
 
+      markStart(userId, 'voiceafk', idx); // ⏱️ süre başarıyla açılır
+
       const embed = new EmbedBuilder()
         .setTitle('🎙️ Sunucu Ses AFK Başlatıldı')
         .setColor(COLORS.success ?? 0x2ecc71)
@@ -481,6 +498,7 @@ export default {
         .setFooter(FOOTER())
         .setTimestamp();
 
+      markStart(userId, 'voiceafk', idx); // ⏱️
       return interaction.editReply({ embeds: [embed] });
     }
   },
