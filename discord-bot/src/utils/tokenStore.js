@@ -32,7 +32,14 @@ function writeStore(store) {
 /** Kullanıcı için şifrelenmiş token kaydet */
 export function saveToken(userId, encryptedObj) {
   const store = readStore();
-  if (!store[userId]) store[userId] = { tokens: [] };
+  if (!store[userId]) store[userId] = { tokens: [], subscription: { type: 'Ücretsiz', expiresAt: null, capacity: 2, roleId: null, guildId: null } };
+  
+  // Kapasite kontrolü
+  const userCapacity = getUserCapacity(userId);
+  if (store[userId].tokens.length >= userCapacity) {
+    throw new Error(`Kapasite dolu! Maksimum ${userCapacity} token ekleyebilirsiniz.`);
+  }
+  
   store[userId].tokens.push({
     ...encryptedObj,
     username: encryptedObj.username || encryptedObj.label || `Hesap ${store[userId].tokens.length + 1}`,
@@ -105,4 +112,86 @@ export function deleteAllTokens(userId) {
 /** Toplam token sayısı */
 export function getTokenCount(userId) {
   return getTokens(userId).length;
+}
+
+/** Kullanıcının abonelik bilgisini getir */
+export function getUserSubscription(userId) {
+  const store = readStore();
+  if (!store[userId]) {
+    return { type: 'Ücretsiz', expiresAt: null, capacity: 2, roleId: null, guildId: null };
+  }
+  return store[userId].subscription || { type: 'Ücretsiz', expiresAt: null, capacity: 2, roleId: null, guildId: null };
+}
+
+/** Kullanıcının kapasite limitini getir */
+export function getUserCapacity(userId) {
+  const sub = getUserSubscription(userId);
+  // Süre kontrolü
+  if (sub.expiresAt && sub.expiresAt !== 'infinite') {
+    const now = Date.now();
+    const expires = new Date(sub.expiresAt).getTime();
+    if (now > expires) {
+      // Süresi dolmuş, ücretsiz'e düş ve geçersiz tokenleri temizle
+      setUserSubscription(userId, { type: 'Ücretsiz', expiresAt: null, capacity: 2, roleId: null, guildId: null });
+      return 2;
+    }
+  }
+  return sub.capacity || 2;
+}
+
+/** Kullanıcının token sayısının kapasiteyi aşıp aşmadığını kontrol et */
+export function checkCapacityOverflow(userId) {
+  const tokens = getTokens(userId);
+  const capacity = getUserCapacity(userId);
+  return tokens.length > capacity;
+}
+
+/** Kullanıcının abonelik bilgisini güncelle */
+export function setUserSubscription(userId, subscription) {
+  const store = readStore();
+  if (!store[userId]) store[userId] = { tokens: [], subscription: { type: 'Ücretsiz', expiresAt: null, capacity: 2, roleId: null, guildId: null } };
+  store[userId].subscription = { ...store[userId].subscription, ...subscription };
+  writeStore(store);
+  return store[userId].subscription;
+}
+
+/** Tüm kullanıcıların listesini getir (admin için) */
+export function getAllUsers() {
+  const store = readStore();
+  return Object.keys(store).map(userId => ({
+    userId,
+    tokenCount: store[userId].tokens?.length || 0,
+    subscription: store[userId].subscription || { type: 'Ücretsiz', expiresAt: null, capacity: 2 },
+    tokens: store[userId].tokens || [],
+  }));
+}
+
+/** Geçersiz tokenleri otomatik scan et ve sil, limiti düşür */
+export async function scanAndCleanInvalidTokens(userId, selfbotTest) {
+  const store = readStore();
+  if (!store[userId]?.tokens) return { cleaned: 0, valid: 0 };
+  
+  let cleaned = 0;
+  let valid = 0;
+  const tokens = [...store[userId].tokens];
+  
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const isValid = await selfbotTest(tokens[i]);
+    if (!isValid) {
+      tokens.splice(i, 1);
+      cleaned++;
+    } else {
+      valid++;
+    }
+  }
+  
+  store[userId].tokens = tokens;
+  
+  // Eğer geçersiz token bulunduysa ve limiti aştıysa ücretsiz'e düşür
+  if (cleaned > 0 && tokens.length < getUserCapacity(userId)) {
+    store[userId].subscription = { type: 'Ücretsiz', expiresAt: null, capacity: 2, roleId: null, guildId: null };
+  }
+  
+  writeStore(store);
+  return { cleaned, valid };
 }

@@ -4,7 +4,7 @@ import https from 'https';
 import http from 'http';
 
 // ── Sabitler ────────────────────────────────────────────────────────────
-const VERIFICATION_CHANNEL_ID = '1569797918658134046';
+const VERIFICATION_CHANNEL_ID = '1571141518138544248';
 const FOLLOW_ROLE_ID = '1569793657261793394';
 const COMMENT_ROLE_ID = '1569795654124052671';
 
@@ -31,8 +31,8 @@ async function downloadImage(url) {
   });
 }
 
-// ── Groq Vision API ile Analiz ─────────────────────────────────
-async function analyzeWithGroq(imageBuffer) {
+// ── Groq Vision API ile Analiz (Retry Logic ile) ─────────────────────────────────
+async function analyzeWithGroq(imageBuffer, retryCount = 0) {
   const base64Image = imageBuffer.toString('base64');
 
   const prompt = `Bu ekran görüntüsünü DİKKATLİCE analiz et:
@@ -47,6 +47,7 @@ async function analyzeWithGroq(imageBuffer) {
 - Kullanıcı adını (@username) kontrol et, eşleşiyor mu?
 - "Takip" butonlarını DİKKATLE incele - "Takip Et" değil "Takiptesin/Takip Ediliyor" olmalı!
 - Türkçe veya İngilizce olabilir
+- Ekran görüntüsü düşük çözünürlüklü veya bulanıksa confidence=low yap
 
 **SADECE JSON formatında cevap ver:**
 {
@@ -66,7 +67,7 @@ async function analyzeWithGroq(imageBuffer) {
       'Authorization': `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'qwen/qwen3.8-27b',
+      model: 'llama-3.2-90b-vision-preview',
       messages: [
         {
           role: 'user',
@@ -84,8 +85,17 @@ async function analyzeWithGroq(imageBuffer) {
     }),
   });
 
+  // Rate limit hatası - tekrar dene
+  if (response.status === 429 && retryCount < 3) {
+    const waitTime = (retryCount + 1) * 2000; // 2s, 4s, 6s
+    console.log(`⏳ Rate limit - ${waitTime / 1000}s bekleniyor... (Deneme ${retryCount + 1}/3)`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    return analyzeWithGroq(imageBuffer, retryCount + 1);
+  }
+
   if (!response.ok) {
-    throw new Error(`Groq API hatası: ${response.status}`);
+    const errorText = await response.text().catch(() => 'Yanıt alınamadı');
+    throw new Error(`Groq API hatası: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();

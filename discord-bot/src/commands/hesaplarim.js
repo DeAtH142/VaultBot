@@ -11,7 +11,7 @@ import {
   StringSelectMenuBuilder,
 } from 'discord.js';
 import { Client as SelfClient } from 'discord.js-selfbot-v13';
-import { getTokens, saveToken, updateTokenStatus, deleteInvalidTokens, deleteToken } from '../utils/tokenStore.js';
+import { getTokens, saveToken, updateTokenStatus, deleteInvalidTokens, deleteToken, getUserSubscription, getUserCapacity } from '../utils/tokenStore.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
 import { createVaultEmbed, createVaultComponents, COLORS } from '../utils/embeds.js';
 import { stopAccountSession } from '../utils/accountManager.js';
@@ -57,7 +57,8 @@ export default {
 
   async execute(message) {
     const tokens = getTokens(message.author.id);
-    const embed = createVaultEmbed(message.author, tokens);
+    const subscription = getUserSubscription(message.author.id);
+    const embed = createVaultEmbed(message.author, tokens, subscription);
     const components = createVaultComponents(tokens);
 
     // Panel GİZLİ olmalı: kasadaki hesaplar kanalda görünmesin.
@@ -228,6 +229,18 @@ export default {
       return interaction.reply({ content: '❌ Hiç token girilmedi!', ephemeral: true });
     }
 
+    // Kapasite kontrolü
+    const currentTokens = getTokens(interaction.user.id);
+    const userCapacity = getUserCapacity(interaction.user.id);
+    const availableSlots = userCapacity - currentTokens.length;
+
+    if (tokenLines.length > availableSlots) {
+      return interaction.reply({
+        content: `❌ Kapasite aşımı! Maksimum ${userCapacity} token ekleyebilirsin. Şu an ${currentTokens.length}/${userCapacity} dolu. Sadece ${availableSlots} slot boş.`,
+        ephemeral: true,
+      });
+    }
+
     // Screenshot 3: "1 token doğrulanıyor..."
     await interaction.reply({
       content: `🕒 **${tokenLines.length}** token doğrulanıyor...`,
@@ -276,14 +289,17 @@ export default {
       }
     }
 
-    const currentTokens = getTokens(interaction.user.id);
+    const updatedTokens = getTokens(interaction.user.id);
+    const subscription = getUserSubscription(interaction.user.id);
+    const capacity = getUserCapacity(interaction.user.id);
 
     // Screenshot 4: Vault Güncellendi Embed
     const resultEmbed = new EmbedBuilder()
       .setColor(COLORS.vault)
       .setDescription([
-        '📦 **Vault Güncellendi** ⬜ `Ücretsiz`',
-        `🟢 **Eklenen:** \`${successCount}\` • 🔴 **Başarısız:** \`${failCount}\` • 📊 **Toplam:** \`${currentTokens.length}/5\``,
+        `📦 **Vault Güncellendi** ⬜ \`${subscription.type}\``,
+        `🟢 **Eklenen:** \`${successCount}\` • 🔴 **Başarısız:** \`${failCount}\` • 📊 **Toplam:** \`${updatedTokens.length}/${capacity}\``,
+        subscription.expiresAt && subscription.expiresAt !== 'infinite' ? `⏰ **Süre:** <t:${Math.floor(new Date(subscription.expiresAt).getTime() / 1000)}:R>` : (subscription.expiresAt === 'infinite' ? '⏰ **Süre:** \`Sınırsız ∞\`' : ''),
         '',
         addedList.join('\n') || '⚠️ Yeni hesap eklenemedi.',
       ].join('\n'))
@@ -296,8 +312,9 @@ export default {
 
     // Ana paneli de güncelle
     try {
-      const updatedEmbed = createVaultEmbed(interaction.user, currentTokens);
-      const updatedComp = createVaultComponents(currentTokens);
+      const updatedSub = getUserSubscription(interaction.user.id);
+      const updatedEmbed = createVaultEmbed(interaction.user, updatedTokens, updatedSub);
+      const updatedComp = createVaultComponents(updatedTokens);
       await interaction.message.edit({ embeds: [updatedEmbed], components: updatedComp });
     } catch {}
   },

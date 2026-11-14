@@ -159,8 +159,9 @@ export function infoEmbed(title, msg) {
 /**
  * 💎 1. resimdeki REXAL Vault ULTRA embed tasarımı
  */
-export function createVaultEmbed(user, tokenList) {
-  const maxCapacity = 5;
+export function createVaultEmbed(user, tokenList, subscription = null) {
+  const sub = subscription || { type: 'Ücretsiz', capacity: 2, expiresAt: null };
+  const maxCapacity = sub.capacity || 2;
   const total = tokenList.length;
   const activeCount = tokenList.filter(t => t.status && t.status !== 'pasif' && t.status !== 'gecersiz').length;
   const passiveCount = tokenList.filter(t => t.status === 'pasif').length;
@@ -180,13 +181,21 @@ export function createVaultEmbed(user, tokenList) {
   const healthPercent = total === 0 ? 100 : Math.round(((activeCount * 1) + (passiveCount * 0.4)) / total * 100);
   const healthEmoji = healthPercent >= 80 ? E.fire : healthPercent >= 50 ? E.lightning : E.warning;
 
+  // Süre bilgisi
+  let expireText = '';
+  if (sub.expiresAt === 'infinite') {
+    expireText = ` • ⏰ \`Sınırsız ∞\``;
+  } else if (sub.expiresAt) {
+    expireText = ` • ⏰ <t:${Math.floor(new Date(sub.expiresAt).getTime() / 1000)}:R>`;
+  }
+
   return new EmbedBuilder()
     .setColor(COLORS.vault)
     .setTitle(`${E.vault}  REXAL TOKEN KASASI`)
     .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
     .setDescription([
       `\`${THIN_DIVIDER}\``,
-      `> ${E.crown} **Kullanıcı:** <@${user.id}>  ${E.star} **Paket:** \`Ücretsiz\``,
+      `> ${E.crown} **Kullanıcı:** <@${user.id}>  ${E.star} **Paket:** \`${sub.type}\`${expireText}`,
       '',
       `${E.chart} **KAPASİTE & DURUM**`,
       `\`\`\`${bar}  ${total}/${maxCapacity}\`\`\``,

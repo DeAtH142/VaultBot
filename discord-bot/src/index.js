@@ -25,6 +25,7 @@ import { destroyAll as destroyAllAccounts } from './utils/accountPool.js';
 import { reconcileOnBoot, heartbeat, closeAllOnShutdown, fmtHours, getPlaytimeUsers } from './utils/playtimeStore.js';
 import { resetLiveKeys, syncUser, listTrackedUsers, processPendingAwards } from './utils/playtimeHooks.js';
 import { handleVerificationMessage } from './commands/sosyalmedya.js';
+import { startSubscriptionChecker } from './utils/subscriptionChecker.js';
 
 dotenv.config();
 
@@ -112,11 +113,14 @@ const CUSTOM_ID_ROUTES = {
   aichat: 'aichat',                 // AI Chat paneli
   boostcheck: 'boostcheck',         // Boost Kontrol paneli
   template: 'template',             // Pro Sunucu Template paneli
-  mobil: 'mobil',                   // Mobil Status paneli
+  mobil: 'mobil',            // Mobil Status paneli
   surem: 'surem',                   // ⏱️ Süre & Rol İlerleme paneli
   otobump: 'otobump',               // 🚀 Oto Bump paneli
   mcafk: 'mcafk',                   // Minecraft AFK paneli
   spotify: 'spotify',               // Spotify Fake Presence paneli
+  rolver: 'rolver',                 // 👑 Rol verme paneli
+  rolal: 'rolal',                   // 🗑️ Rol alma paneli
+  vaultsettings: 'vaultsettings',   // 🔧 Vault Admin paneli
 };
 
 function resolveCommand(name) {
@@ -137,6 +141,9 @@ client.once('ready', () => {
 
   // Bulut senkronu (GitHub Actions / ephemeral ortamlarda kalıcılık sağlar)
   startPeriodicPush();
+
+  // ⏰ Abonelik süre kontrolü başlat
+  startSubscriptionChecker(client);
 
   // ⏱️ Süre motoru: bot kapalıyken geçen süre sayılmasın diye önceki oturumlar
   // canlılık damgası (lastSeen) anında kesilir; sonra recovery'ler çalışır.
