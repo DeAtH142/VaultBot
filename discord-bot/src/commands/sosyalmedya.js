@@ -17,16 +17,13 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 // Güncel modeller (Biri patlarsa diğeri otomatik denenir)
 const GROQ_VISION_MODELS = [
-  'llama-3.2-11b-vision-preview',
-  'llama-3.2-90b-vision-preview',
-  'llava-v1.5-7b-4096-preview'
+  'qwen/qwen3.8-27b',                  // ✅ Öncelikli model (güncel ve görsel destekli)
+  'meta-llama/llama-4-scout-17b-16e-instruct' // ✅ Yedek model
 ];
 
 const GEMINI_VISION_MODELS = [
-  'gemini-1.5-flash-latest',
-  'gemini-1.5-pro-latest',
-  'gemini-1.0-pro-vision-latest',
-  'gemini-1.5-flash'
+  'gemini-2.5-flash',                  // ✅ Gemini 1.5'in yerine gelen güncel model
+  'gemini-3.1-flash-lite'              // ✅ Alternatif güncel model
 ];
 
 // ── Görüntü İndir ──────────────────────────────────────────────────
