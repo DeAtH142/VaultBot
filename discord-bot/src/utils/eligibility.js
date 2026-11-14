@@ -19,6 +19,7 @@ import { isVoiceAfkRunning } from './voiceAfkRunner.js';
 import { isMobileStatusRunning } from './mobileStatusRunner.js';
 import { isVoiceRecordingRunning } from './voiceRecRunner.js';
 import { isSpotifyRunning } from './spotifyPresenceRunner.js';
+import { isBumpRunning } from './bumpRunner.js';
 
 /**
  * Uygun sistemler — anahtar, oturum anahtarı olarak da kullanılır ("online:0").
@@ -32,6 +33,7 @@ export const ELIGIBLE = {
   mobil: { label: 'Mobil Status', emoji: '📱', probe: (u, i) => isMobileStatusRunning(u, i) },
   voicerec: { label: 'Ses Kayıt', emoji: '🎙️', probe: (u, i) => isVoiceRecordingRunning(u, i) },
   spotify: { label: 'Spotify Presence', emoji: '🎵', probe: (u, i) => isSpotifyRunning(u, i) },
+  otobump: { label: 'Oto Bump', emoji: '🚀', probe: (u, i) => isBumpRunning(u, i) },
 };
 // NOT: aichat (AI Chat) ve otomesaj (Oto Mesaj) bilinçli olarak KAPALI.
 // Bunlar süreye sayılmaz — aşağıdaki NON_ELIGIBLE grubundadır.

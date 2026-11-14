@@ -19,6 +19,7 @@ import { recoverVoiceRecordings } from './utils/voiceRecRunner.js';
 import { recoverScenarios } from './utils/scenarioRunner.js';
 import { recoverStreamerPresences } from './utils/streamerPresenceRunner.js';
 import { recoverBotKeeper } from './utils/botKeeperRunner.js';
+import { recoverBumpJobs, destroyAllBumps } from './utils/bumpRunner.js';
 import { pullFromCloud, pushToCloud, startPeriodicPush, isCloudEnabled } from './utils/cloudStore.js';
 import { destroyAll as destroyAllAccounts } from './utils/accountPool.js';
 import { reconcileOnBoot, heartbeat, closeAllOnShutdown, fmtHours, getPlaytimeUsers } from './utils/playtimeStore.js';
@@ -112,6 +113,7 @@ const CUSTOM_ID_ROUTES = {
   template: 'template',             // Pro Sunucu Template paneli
   mobil: 'mobil',                   // Mobil Status paneli
   surem: 'surem',                   // ⏱️ Süre & Rol İlerleme paneli
+  otobump: 'otobump',               // 🚀 Oto Bump paneli
   mcafk: 'mcafk',                   // Minecraft AFK paneli
   spotify: 'spotify',               // Spotify Fake Presence paneli
 };
@@ -165,6 +167,7 @@ client.once('ready', () => {
   recoverScenarios().catch(console.error);
   recoverStreamerPresences().catch(console.error);
   recoverBotKeeper().catch(console.error);
+  recoverBumpJobs().catch(console.error);
 
   // Recovery başladıktan sonra canlı sistemleri süre motoruna kaydet
   setTimeout(registerExistingSessions, 10 * 1000);
@@ -293,6 +296,7 @@ async function gracefulShutdown(reason) {
   console.log(`\n🛑 Bot kapatılıyor (${reason})...`);
   try { closeAllOnShutdown(); } catch (err) { console.error('[Playtime] Kapanış hatası:', err.message); }
   try { destroyAllAccounts(); } catch (err) { console.error('[AccountPool] Kapanış hatası:', err.message); }
+  try { destroyAllBumps(); } catch (err) { console.error('[Bump] Kapanış hatası:', err.message); }
   try { if (isCloudEnabled()) await pushToCloud(); } catch (err) { console.error('[CloudStore] Kapanış senkronu hatası:', err.message); }
   process.exit(0);
 }
