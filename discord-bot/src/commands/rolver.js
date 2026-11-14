@@ -5,16 +5,24 @@ import {
   TextInputStyle,
   ActionRowBuilder,
   EmbedBuilder,
-  StringSelectMenuBuilder,
-  PermissionFlagsBits
+  StringSelectMenuBuilder
 } from 'discord.js';
-import { setUserSubscription, getUserSubscription } from '../utils/tokenStore.js';
+import { setUserSubscription } from '../utils/tokenStore.js';
 import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
 
-// Yetkili admin ID'leri (istediğin 2 ID'yi buraya gir)
+// ── YETKİLİ ADMİNLER (BURAYA KENDİ ID'LERİNİ YAZ) ──
 const AUTHORIZED_ADMINS = [
-  '123456789012345678', // ID 1
-  '876543210987654321', // ID 2
+  '1160564359727173792' // Kendi ID'ni buraya yaz kral!
+];
+
+// ── 6 ÖZEL PAKET AYARI (ROL ID'LERİNİ VE TOKEN LİMİTLERİNİ BURAYA YAZ) ──
+const PACKAGES = [
+  { id: 'paket1', name: '1. Paket Mina 🏮', roleId: '1571141362076622912', capacity: 3 },
+  { id: 'paket2', name: '2. Paket Sueda 🌲', roleId: '1571141360986234960', capacity: 7 },
+  { id: 'paket3', name: '3. Paket Lidya 🌷', roleId: '1571141359258181652', capacity: 14 },
+  { id: 'paket4', name: '4. Paket Hilal 💜', roleId: '1571141344418594951', capacity: 20 },
+  { id: 'paket5', name: '5. Paket Zoktay ☄️', roleId: '1571141342845739159', capacity: 25 },
+  { id: 'paket6', name: '6. Paket Esin 💛', roleId: '1571141341797290004', capacity: 50 }
 ];
 
 export default {
@@ -22,36 +30,22 @@ export default {
   description: 'Kullanıcıya özel rol paketi ver ve vault kapasitesini artır (Admin)',
 
   async execute(message, args) {
-    // Yetki kontrolü
     if (!AUTHORIZED_ADMINS.includes(message.author.id)) {
-      return message.reply({
-        content: '❌ Bu komutu kullanma yetkiniz yok!',
-        ephemeral: true
-      });
+      return message.reply({ content: '❌ Bu komutu kullanma yetkiniz yok kral!', ephemeral: true });
     }
 
-    // Kullanım: !rolver
     const embed = new EmbedBuilder()
       .setColor(COLORS.gold)
-      .setTitle(`${E.crown} REXAL — Rol Verme Paneli`)
+      .setTitle(`${E.crown} REXAL — Premium Paket Verme Paneli`)
       .setDescription([
         `${THIN_DIVIDER}`,
         `> ${E.gear} **Yönetici:** <@${message.author.id}>`,
         '',
         `${E.info} **NASIL KULLANILIR?**`,
-        '> 1️⃣ Aşağıdaki butona tıkla',
-        '> 2️⃣ Kullanıcı seç',
-        '> 3️⃣ Rol seç (sunucundaki roller)',
-        '> 4️⃣ Süre belirle (örn: `1 hafta`, `3 gün`, `infinite`)',
-        '> 5️⃣ Sistem otomatik rol verir ve kapasiteyi artırır',
-        '',
-        `${E.star} **ÖZELLİKLER**`,
-        `> • Her rol +2 kapasite verir (varsayılan 2 → 4'e çıkar)`,
-        `> • Rol otomatik olarak sunucuda verilir`,
-        `> • Kullanıcı sunucuda olmalı (auto-register)`,
-        `> • Süre dolunca otomatik ücretsiz'e döner`,
-        `> • \`infinite\` yazarsan sınırsız olur`,
-        `> • Rol silinirse otomatik scan olur`,
+        '> 1️⃣ Aşağıdan kullanıcı seç',
+        '> 2️⃣ Sunucudaki 6 özel paketten birini seç',
+        '> 3️⃣ Süre belirle (örn: `1 hafta`, `infinite`)',
+        '> 4️⃣ Sistem otomatik rol verir, kapasiteyi ayarlar ve DM atar!',
         '',
         `${THIN_DIVIDER}`,
       ].join('\n'))
@@ -71,7 +65,7 @@ export default {
               description: `ID: ${m.user.id}`,
               emoji: '👤',
             }))
-            .slice(0, 25) // Max 25 seçenek
+            .slice(0, 25)
         )
     );
 
@@ -80,82 +74,54 @@ export default {
 
   async onSelect(interaction, actionParts) {
     const action = actionParts[0];
-
-    // Yetki kontrolü
     if (!AUTHORIZED_ADMINS.includes(interaction.user.id)) {
-      return interaction.reply({
-        content: '❌ Bu paneli kullanamazsın!',
-        ephemeral: true
-      });
+      return interaction.reply({ content: '❌ Bu paneli kullanamazsın!', ephemeral: true });
     }
 
     if (action === 'selectuser') {
       const targetUserId = interaction.values[0];
-
-      // Kullanıcının sunucuda olup olmadığını kontrol et
       const member = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+      
       if (!member) {
-        return interaction.reply({
-          content: '❌ Bu kullanıcı sunucuda değil! Rol verebilmek için kullanıcı sunucuda olmalı.',
-          ephemeral: true,
-        });
+        return interaction.reply({ content: '❌ Bu kullanıcı sunucuda değil!', ephemeral: true });
       }
 
-      // Sunucudaki rolleri getir (everyone hariç)
-      const roles = interaction.guild.roles.cache
-        .filter(r => r.id !== interaction.guild.id && !r.managed)
-        .sort((a, b) => b.position - a.position)
-        .map(r => ({
-          label: r.name,
-          value: r.id,
-          description: `Pozisyon: ${r.position}`,
-          emoji: '🎭',
-        }))
-        .slice(0, 25);
-
-      if (roles.length === 0) {
-        return interaction.reply({
-          content: '❌ Bu sunucuda verilecek rol bulunamadı!',
-          ephemeral: true,
-        });
-      }
+      // Rastgele roller yerine senin 6 paketini listeliyoruz
+      const packageOptions = PACKAGES.map(p => ({
+        label: p.name,
+        value: p.id,
+        description: `Kapasite: ${p.capacity} Token`,
+        emoji: '🎁',
+      }));
 
       const row = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`rolver:selectrole:${targetUserId}`)
-          .setPlaceholder('🎭 Rol seç...')
-          .addOptions(roles)
+          .setCustomId(`rolver:selectpackage:${targetUserId}`)
+          .setPlaceholder('🎁 Paket seç...')
+          .addOptions(packageOptions)
       );
 
       const embed = new EmbedBuilder()
         .setColor(COLORS.primary)
         .setTitle(`${E.star} Kullanıcı Seçildi`)
-        .setDescription([
-          `> 👤 **Hedef:** <@${targetUserId}>`,
-          '',
-          '📋 **Şimdi aşağıdan bir rol seç:**',
-        ].join('\n'))
+        .setDescription(`> 👤 **Hedef:** <@${targetUserId}>\n\n📋 **Şimdi aşağıdan bir paket seç:**`)
         .setFooter(BRAND.footer());
 
       await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
 
-    else if (action === 'selectrole') {
+    else if (action === 'selectpackage') {
       const targetUserId = actionParts[1];
-      const roleId = interaction.values[0];
-      const role = interaction.guild.roles.cache.get(roleId);
+      const packageId = interaction.values[0];
+      const selectedPackage = PACKAGES.find(p => p.id === packageId);
 
-      if (!role) {
-        return interaction.reply({
-          content: '❌ Rol bulunamadı!',
-          ephemeral: true,
-        });
+      if (!selectedPackage) {
+        return interaction.reply({ content: '❌ Paket bulunamadı!', ephemeral: true });
       }
 
-      // Modal aç - süre gir
       const modal = new ModalBuilder()
-        .setCustomId(`rolver:duration:${targetUserId}:${roleId}`)
-        .setTitle('Süre Belirle');
+        .setCustomId(`rolver:duration:${targetUserId}:${selectedPackage.id}`)
+        .setTitle(`${selectedPackage.name} - Süre Belirle`);
 
       const durationInput = new TextInputBuilder()
         .setCustomId('duration')
@@ -171,42 +137,30 @@ export default {
 
   async onModalSubmit(interaction, actionParts) {
     const action = actionParts[0];
-
-    // Yetki kontrolü
     if (!AUTHORIZED_ADMINS.includes(interaction.user.id)) {
-      return interaction.reply({
-        content: '❌ Bu işlemi yapamazsın!',
-        ephemeral: true
-      });
+      return interaction.reply({ content: '❌ Bu işlemi yapamazsın!', ephemeral: true });
     }
 
     if (action === 'duration') {
       const targetUserId = actionParts[1];
-      const roleId = actionParts[2];
+      const packageId = actionParts[2];
       const durationText = interaction.fields.getTextInputValue('duration').trim().toLowerCase();
+      const selectedPackage = PACKAGES.find(p => p.id === packageId);
 
-      await interaction.reply({
-        content: '⏳ İşleniyor...',
-        ephemeral: true
-      });
+      await interaction.reply({ content: '⏳ İşleniyor...', ephemeral: true });
 
       try {
-        // Süreyi hesapla
         let expiresAt = null;
         if (durationText === 'infinite' || durationText === 'sınırsız') {
           expiresAt = 'infinite';
         } else {
           const match = durationText.match(/(\d+)\s*(hafta|gün|ay|yıl|saat)/i);
           if (!match) {
-            return interaction.editReply({
-              content: '❌ Geçersiz süre formatı! Örnek: `1 hafta`, `3 gün`, `infinite`',
-            });
+            return interaction.editReply({ content: '❌ Geçersiz süre formatı! Örnek: `1 hafta`, `3 gün`' });
           }
-
           const amount = parseInt(match[1]);
           const unit = match[2].toLowerCase();
           let ms = 0;
-
           switch (unit) {
             case 'saat': ms = amount * 60 * 60 * 1000; break;
             case 'gün': ms = amount * 24 * 60 * 60 * 1000; break;
@@ -214,50 +168,38 @@ export default {
             case 'ay': ms = amount * 30 * 24 * 60 * 60 * 1000; break;
             case 'yıl': ms = amount * 365 * 24 * 60 * 60 * 1000; break;
           }
-
           expiresAt = new Date(Date.now() + ms).toISOString();
         }
 
-        // Rol adını al
-        const role = interaction.guild.roles.cache.get(roleId);
-        if (!role) {
-          return interaction.editReply({ content: '❌ Rol bulunamadı!' });
-        }
-
-        // Kullanıcıya rolü ver (auto-register)
         const member = await interaction.guild.members.fetch(targetUserId).catch(() => null);
-        if (!member) {
-          return interaction.editReply({ 
-            content: '❌ Kullanıcı sunucuda bulunamadı! Rol verilemedi.' 
-          });
-        }
+        if (!member) return interaction.editReply({ content: '❌ Kullanıcı sunucuda bulunamadı!' });
         
-        await member.roles.add(roleId).catch((err) => {
-          throw new Error(`Rol verilemedi: ${err.message}`);
+        const role = interaction.guild.roles.cache.get(selectedPackage.roleId);
+        if (!role) return interaction.editReply({ content: `❌ Rol ID'si (${selectedPackage.roleId}) sunucuda bulunamadı! Lütfen koddan kontrol et.` });
+
+        // Rolü ver
+        await member.roles.add(role.id).catch((err) => {
+          throw new Error(`Rol verilemedi (Botun rolü bu rolün altında mı?): ${err.message}`);
         });
 
-        // Abonelik bilgisini güncelle
+        // Aboneliği kaydet
         setUserSubscription(targetUserId, {
-          type: role.name,
+          type: selectedPackage.name,
           expiresAt,
-          capacity: 4, // Her rol +2 kapasite (varsayılan 2 + 2 = 4)
-          roleId,
+          capacity: selectedPackage.capacity,
+          roleId: role.id,
           guildId: interaction.guild.id,
         });
 
-        console.log(`👑 [RolVer] Kullanıcı ${targetUserId} → Rol: ${role.name} → Kapasite: 4 → Süre: ${expiresAt === 'infinite' ? 'Sınırsız' : expiresAt}`);
-
         const embed = new EmbedBuilder()
           .setColor(COLORS.success)
-          .setTitle(`${E.check} Rol Başarıyla Verildi!`)
+          .setTitle(`${E.check} Paket Başarıyla Verildi!`)
           .setDescription([
             `${THIN_DIVIDER}`,
             `> 👤 **Kullanıcı:** <@${targetUserId}>`,
             `> 🎭 **Rol:** ${role}`,
-            `> 📊 **Yeni Kapasite:** \`4 token\` (2 → 4)`,
+            `> 📊 **Yeni Kapasite:** \`${selectedPackage.capacity} Token\``,
             `> ${E.clock} **Süre:** ${expiresAt === 'infinite' ? '`Sınırsız ∞`' : `<t:${Math.floor(new Date(expiresAt).getTime() / 1000)}:R>`}`,
-            '',
-            `${E.star} Kullanıcı artık kasasına 4'e kadar token ekleyebilir!`,
             `${THIN_DIVIDER}`,
           ].join('\n'))
           .setFooter(BRAND.footer('Rol Sistemi'))
@@ -265,7 +207,7 @@ export default {
 
         await interaction.editReply({ content: null, embeds: [embed] });
 
-        // Kullanıcıya bildirim gönder
+        // İSTEDİĞİN DM MESAJI
         try {
           const user = await interaction.client.users.fetch(targetUserId);
           const userEmbed = new EmbedBuilder()
@@ -273,26 +215,23 @@ export default {
             .setTitle(`${E.crown} REXAL — Premium Paket Aktif!`)
             .setDescription([
               `${THIN_DIVIDER}`,
-              `> ${E.star} **Tebrikler!** Sana özel bir paket verildi.`,
+              `> ${E.star} **Tebrikler!** **${role.name}** rolünü aldın!`,
               '',
-              `> 🎭 **Paket:** ${role.name}`,
-              `> 📊 **Kapasite:** \`4 token\` (eskiden 2)`,
+              `> 🎭 **Paket:** ${selectedPackage.name}`,
+              `> 📊 **Kapasite:** Artık vault'una \`${selectedPackage.capacity}\` adet hesap ekleyebilirsin!`,
               `> ${E.clock} **Geçerlilik:** ${expiresAt === 'infinite' ? '`Sınırsız ∞`' : `<t:${Math.floor(new Date(expiresAt).getTime() / 1000)}:R>`}`,
               '',
-              `${E.info} Artık kasana 4'e kadar token ekleyebilirsin!`,
+              `${E.info} Vault sistemine giderek hesaplarını eklemeye başlayabilirsin. İyi kullanımlar!`,
               `${THIN_DIVIDER}`,
             ].join('\n'))
-            .setFooter(BRAND.footer('Premium Sistem'))
+            .setFooter(BRAND.footer('Vault Sistemi'))
             .setTimestamp();
 
-          await user.send({ embeds: [userEmbed] }).catch(() => { });
+          await user.send({ embeds: [userEmbed] }).catch(() => console.log('Kullanıcıya DM atılamadı.'));
         } catch { }
 
       } catch (err) {
-        console.error('Rol verme hatası:', err);
-        await interaction.editReply({
-          content: `❌ Hata: ${err.message}`
-        });
+        await interaction.editReply({ content: `❌ Hata: ${err.message}` });
       }
     }
   },
