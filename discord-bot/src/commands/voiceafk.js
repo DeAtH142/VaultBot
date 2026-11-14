@@ -219,12 +219,21 @@ export default {
 
         if (s) {
           const target = cfg?.type === 'dm'
-            ? `> 💬 DM Kanal: \`${cfg.channelId}\``
-            : `> 📡 Sunucu: \`${cfg.guildId}\` | Kanal: \`${cfg.channelId}\``;
+            ? `> 💬 DM Kanal: \`${s.channelId}\``
+            : `> 📡 Sunucu: \`${s.guildId}\` | Kanal: \`${s.channelId}\``;
+          const health = s.connected
+            ? '🟢 **Bağlantı sağlıklı**'
+            : `🟡 **Bağlantı: \`${s.status}\`**`;
+          const extras = [];
+          if (s.currentChannelId !== s.originalChannelId) extras.push('🔀 *yedek kanala geçildi*');
+          if (s.sharedWith?.length) extras.push(`🔗 *paylaşılan client: ${s.sharedWith.join(', ')}*`);
+          if (s.lastError) extras.push(`⚠️ *son hata: \`${s.lastError}\`*`);
           return [
             `> ✅ **${name}** — ${typeTag} Bağlı`,
             `> ⏱️ Süre: \`${s.durationMin} dk\` | 🔁 Yeniden Bağlanma: \`${s.reconnections}\``,
+            `> ${health}`,
             cfg ? target : null,
+            extras.length ? `> ${extras.join(' · ')}` : null,
           ].filter(Boolean).join('\n');
         }
 
@@ -297,7 +306,9 @@ export default {
         const name = accountName(tokens, cfg.tokenIndex);
         try {
           const gid = cfg.type === 'dm' ? DM_GUILD : cfg.guildId;
-          const res = await startVoiceAfk(userId, cfg.tokenIndex, gid, cfg.channelId);
+          const res = await startVoiceAfk(userId, cfg.tokenIndex, gid, cfg.channelId, {
+            fallbackChannelId: cfg.fallbackChannelId || null,
+          });
           if (res.success) {
             started++;
             results.push(`> ✅ **${name}** — ${cfg.type === 'dm' ? '💬 DM' : '🎙️ Sunucu'} yeniden bağlandı`);
@@ -354,9 +365,19 @@ export default {
         .setValue(existing.type === 'guild' ? (existing.channelId || '') : '')
         .setRequired(true);
 
+      // İsteğe bağlı: yedek ses kanalı (asıl kanal dolduğunda kullanılır)
+      const fallbackInput = new TextInputBuilder()
+        .setCustomId('fallback_channel_id')
+        .setLabel('Yedek Ses Kanalı ID (opsiyonel)')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Kanal dolduğunda buraya geçer')
+        .setValue(existing.fallbackChannelId || '')
+        .setRequired(false);
+
       modal.addComponents(
         new ActionRowBuilder().addComponents(guildInput),
         new ActionRowBuilder().addComponents(channelInput),
+        new ActionRowBuilder().addComponents(fallbackInput),
       );
 
       return interaction.showModal(modal);
@@ -428,13 +449,15 @@ export default {
       const idx = parseInt(actionParts[1], 10);
       const guildId = interaction.fields.getTextInputValue('guild_id').trim();
       const channelId = interaction.fields.getTextInputValue('channel_id').trim();
+      let fallbackChannelId = '';
+      try { fallbackChannelId = interaction.fields.getTextInputValue('fallback_channel_id')?.trim() || ''; } catch { }
 
       await interaction.deferReply({ ephemeral: true });
-      store.set(userId, idx, { type: 'guild', guildId, channelId, enabled: true });
+      store.set(userId, idx, { type: 'guild', guildId, channelId, fallbackChannelId, enabled: true });
 
       const tokens = getTokens(userId);
       const name = accountName(tokens, idx);
-      const res = await startVoiceAfk(userId, idx, guildId, channelId);
+      const res = await startVoiceAfk(userId, idx, guildId, channelId, { fallbackChannelId });
 
       if (!res.success) {
         return interaction.editReply({
@@ -519,8 +542,15 @@ export function createMainEmbed(client) {
       statusLine([
         ['🎙️', 'Sunucu Ses', 'Guild + Kanal'],
         ['💬', 'DM Ses', 'Sadece Kanal ID'],
-        ['👤', 'Kapsam', 'Sadece Siz'],
+        ['🔗', 'Kimlik', 'Tek Bağlantı'],
       ]),
+      '',
+      section('stabilite v2'),
+      `> ${UX.dot2} 🔗 **Tek Bağlantı** — Hesap başına **tek** Discord bağlantısı; Online/AutoTyper ile paylaşılır. Diğer hesap AFK'a girince **sen düşmezsin**.`,
+      `> ${UX.dot2} 🧩 **Gerçek Durum Takibi** — \`VoiceConnectionStatus\` ile bağlantı sağlığı 20 sn'de bir kontrol edilir`,
+      `> ${UX.dot2} 🔁 **Akıllı Yeniden Bağlanma** — backoff (3→5→10→20→30 sn) + limit; sonsuz döngü yok`,
+      `> ${UX.dot2} 🔀 **Yedek Kanal** — asıl kanal doldu ise otomatik yedeğe geçer`,
+      `> ${UX.dot2} 🔒 **Çift Token Koruması** — aynı Discord hesabı 2 slota eklenmişse ikinci bağlantı açılmaz`,
       '',
       section('Nasıl Çalışır?'),
       `> ${UX.dot2} 🎙️ **Havuzdan Hesap Seç** — Kendi hesabını sunucu sesine bağla`,

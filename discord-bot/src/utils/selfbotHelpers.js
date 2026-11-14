@@ -5,6 +5,13 @@ import { Client } from 'discord.js-selfbot-v13';
 import { decrypt } from './crypto.js';
 import { getToken } from './tokenStore.js';
 
+/** accountPool içinde tutulan (paylaşılan) client'lar — kazara öldürülmemeli */
+const pooledClients = new WeakSet();
+
+export function markPooled(client) {
+  if (client) pooledClients.add(client);
+}
+
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -43,10 +50,18 @@ export async function loginVaultAccount(userId, tokenIndex, { timeoutMs = 15000 
 }
 
 /**
- * Bir selfbot client'ı güvenli şekilde kapatır (RAM temizliği / "sıfır iz").
+ * Bir selfbot client'ı güvenli şekilde kapatır.
+ * ⚠️ accountPool'daki client'lar paylaşılıyor — burada öldürülürse Ses AFK gibi
+ * diğer modüllerin bağlantısı da düşer. Bu yüzden havuz client'ları korunur;
+ * onları kapatmak için accountPool.release(..., {force:true}) kullanılmalı.
  */
 export function destroyClient(client) {
-  try { client?.destroy(); } catch { }
+  if (!client) return;
+  if (pooledClients.has(client)) {
+    console.log('[SelfbotHelpers] Havuz client\\\'ı korundu (paylaşılıyor) — destroy atlandı');
+    return;
+  }
+  try { client.destroy(); } catch { }
 }
 
 /**

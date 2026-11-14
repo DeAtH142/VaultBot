@@ -20,6 +20,7 @@ import { recoverScenarios } from './utils/scenarioRunner.js';
 import { recoverStreamerPresences } from './utils/streamerPresenceRunner.js';
 import { recoverBotKeeper } from './utils/botKeeperRunner.js';
 import { pullFromCloud, pushToCloud, startPeriodicPush, isCloudEnabled } from './utils/cloudStore.js';
+import { destroyAll as destroyAllAccounts } from './utils/accountPool.js';
 import { reconcileOnBoot, heartbeat, closeAllOnShutdown, fmtHours, getPlaytimeUsers } from './utils/playtimeStore.js';
 import { resetLiveKeys, syncUser, listTrackedUsers, processPendingAwards } from './utils/playtimeHooks.js';
 
@@ -291,6 +292,7 @@ function registerExistingSessions() {
 async function gracefulShutdown(reason) {
   console.log(`\n🛑 Bot kapatılıyor (${reason})...`);
   try { closeAllOnShutdown(); } catch (err) { console.error('[Playtime] Kapanış hatası:', err.message); }
+  try { destroyAllAccounts(); } catch (err) { console.error('[AccountPool] Kapanış hatası:', err.message); }
   try { if (isCloudEnabled()) await pushToCloud(); } catch (err) { console.error('[CloudStore] Kapanış senkronu hatası:', err.message); }
   process.exit(0);
 }

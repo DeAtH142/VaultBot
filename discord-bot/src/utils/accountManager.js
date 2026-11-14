@@ -1,6 +1,5 @@
 // src/utils/accountManager.js
-import { Client } from 'discord.js-selfbot-v13';
-import { decrypt } from './crypto.js';
+import { acquire, release } from './accountPool.js';
 import { getTokens } from './tokenStore.js';
 
 // Aktif client oturumları: `${userId}:${tokenIndex}` -> { client, status, customStatus }
@@ -46,46 +45,17 @@ export async function setAccountPresence(userId, tokenIndex, encryptedTokenObj, 
       }
     };
 
-    if (session && session.client && session.client.isReady()) {
-      applyPresence(session.client);
-      session.status = discordStatus;
-      session.customStatus = customStatus;
-      return { success: true, username: session.client.user.tag };
+    // Aynı hesap için ortak client (Ses AFK / AutoTyper ile paylaşılır).
+    // Böylece presence değiştirmek ses bağlantısını DÜŞÜRMEZ.
+    const acc = await acquire(userId, tokenIndex, 'online');
+    if (!acc.success) {
+      console.error(`[AccountManager] Giriş hatası (${sessionKey}):`, acc.error);
+      return { success: false, error: acc.error };
     }
 
-    // Tokeni çöz
-    const rawToken = decrypt(encryptedTokenObj);
-
-    // Yeni self client başlat
-    const client = new Client({ checkUpdate: false });
-
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Hesaba giriş zaman aşımına uğradı (15s).'));
-      }, 15000);
-
-      client.once('ready', () => {
-        clearTimeout(timeout);
-        try {
-          applyPresence(client);
-          activeSessions.set(sessionKey, { client, status: discordStatus, customStatus });
-          resolve();
-        } catch (err) {
-          reject(err);
-        }
-      });
-
-      client.once('error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-
-      client.login(rawToken).catch((err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-    });
-
+    const client = acc.client;
+    applyPresence(client);
+    activeSessions.set(sessionKey, { client, status: discordStatus, customStatus });
     return { success: true, username: client.user.tag };
   } catch (err) {
     console.error(`[AccountManager] Giriş hatası (${sessionKey}):`, err.message);
@@ -100,10 +70,9 @@ export function stopAccountSession(userId, tokenIndex) {
   const sessionKey = `${userId}:${tokenIndex}`;
   const session = activeSessions.get(sessionKey);
 
-  if (session && session.client) {
-    try {
-      session.client.destroy();
-    } catch (e) {}
+  if (session) {
+    // Sadece online modülünün kirasını bırak — Ses AFK hâlâ kullanıyorsa client açık kalır
+    release(userId, tokenIndex, 'online');
     activeSessions.delete(sessionKey);
     return true;
   }
