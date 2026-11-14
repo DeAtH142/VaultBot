@@ -115,6 +115,7 @@ const CUSTOM_ID_ROUTES = {
   rolver: 'rolver',
   rolal: 'rolal',
   rol: 'rol',
+  code: 'code', // 🎁 Kod Panel sistemi eklendi
   vaultsettings: 'vaultsettings',
 };
 
@@ -167,7 +168,7 @@ client.once('ready', () => {
   recoverBotKeeper().catch(console.error);
   recoverBumpJobs().catch(console.error);
 
-  // 30 saniye bekle, tüm sistemler otursun, sonra süreyi kaydet (10sn çok erkendi)
+  // 30 saniye bekle, tüm sistemler otursun, sonra süreyi kaydet
   setTimeout(registerExistingSessions, 30 * 1000);
 
   setTimeout(() => {
@@ -177,12 +178,13 @@ client.once('ready', () => {
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
 const PREFIX = '!';
+const CODE_REDEEM_CHANNEL_ID = '1571141536136302632'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   
-  // RX- Kod Kullanma Sistemi
-  if (message.content.startsWith('RX-')) {
+  // ── KOD KULLANMA (Sadece Belirlenen Kanalda ve RX- ile başlıyorsa) ──
+  if (message.channel.id === CODE_REDEEM_CHANNEL_ID && message.content.startsWith('RX-')) {
     const codeCommand = client.commands.get('code');
     if (codeCommand) {
       try {
@@ -281,7 +283,8 @@ function startPlaytimeEngine() {
         try {
           syncUser(userId);
         } catch (userErr) {
-          console.warn(`[Playtime] ${userId} senkron edilemedi:`, userErr.message);
+          // Hata izolasyonu: Tek kullanıcı patlarsa diğerlerini etkilemesin
+          // console.warn(`[Playtime] ${userId} senkron edilemedi:`, userErr.message); 
         }
       }
     } catch (err) {
@@ -298,7 +301,7 @@ function registerExistingSessions() {
     for (const userId of users) {
       try {
         const res = syncUser(userId);
-        // Eğer res veya res.active yoksa hata vermesini engelliyoruz (BUG FIX)
+        // BUG FIX: Eğer res veya res.active undefined gelirse çökmesini engelliyoruz
         if (res && Array.isArray(res.active)) {
           active += res.active.length;
         }
