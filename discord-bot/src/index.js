@@ -96,6 +96,7 @@ const CUSTOM_ID_ROUTES = {
   voiceafk: 'voiceafk',
   otoreact: 'otoreact',
   autoleave: 'autoleave',
+  sespaneli: 'sespaneli',
   joiner: 'joiner',
   profilechanger: 'profilechanger',
   friendcleaner: 'friendcleaner',
