@@ -9,7 +9,9 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { createWriteStream } from 'fs';
-import archiver from 'archiver';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const archiver = require('archiver');
 import fetch from 'node-fetch';
 import { Client as SelfClient } from 'discord.js-selfbot-v13';
 import { decrypt } from '../utils/crypto.js';
