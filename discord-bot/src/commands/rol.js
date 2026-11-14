@@ -4,7 +4,7 @@ import { setUserSubscription } from '../utils/tokenStore.js';
 import { parseDuration } from '../utils/timeParser.js';
 import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
 
-const AUTHORIZED_ADMINS = ['SENIN_DISCORD_ID_BURAYA'];
+const AUTHORIZED_ADMINS = ['1160564359727173792'];
 
 export default {
   name: 'rol',
