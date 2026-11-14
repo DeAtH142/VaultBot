@@ -17,11 +17,8 @@ import { isOwoRunning } from './owoRunner.js';
 import { isAutoTyperRunning } from './autoTyperRunner.js';
 import { isVoiceAfkRunning } from './voiceAfkRunner.js';
 import { isMobileStatusRunning } from './mobileStatusRunner.js';
-import { isAiRunning } from './aiChatRunner.js';
 import { isVoiceRecordingRunning } from './voiceRecRunner.js';
 import { isSpotifyRunning } from './spotifyPresenceRunner.js';
-
-import { isJobRunning } from './scheduledMessenger.js';
 
 /**
  * Uygun sistemler — anahtar, oturum anahtarı olarak da kullanılır ("online:0").
@@ -33,11 +30,11 @@ export const ELIGIBLE = {
   autotyper: { label: 'AutoTyper', emoji: '⌨️', probe: (u, i) => isAutoTyperRunning(u, i) },
   voiceafk: { label: 'Ses AFK', emoji: '🔊', probe: (u, i) => isVoiceAfkRunning(u, i) },
   mobil: { label: 'Mobil Status', emoji: '📱', probe: (u, i) => isMobileStatusRunning(u, i) },
-  aichat: { label: 'AI Chat', emoji: '🤖', probe: (u, i) => isAiRunning(u, i) },
   voicerec: { label: 'Ses Kayıt', emoji: '🎙️', probe: (u, i) => isVoiceRecordingRunning(u, i) },
   spotify: { label: 'Spotify Presence', emoji: '🎵', probe: (u, i) => isSpotifyRunning(u, i) },
-  otomesaj: { label: 'Oto Mesaj', emoji: '📢', probe: (u, i) => isJobRunning(u, i) },
 };
+// NOT: aichat (AI Chat) ve otomesaj (Oto Mesaj) bilinçli olarak KAPALI.
+// Bunlar süreye sayılmaz — aşağıdaki NON_ELIGIBLE grubundadır.
 
 /**
  * Sayılmayan modüller (bilgi amaçlı; panelde "puanlanmaz" diye gösterilir).
@@ -46,6 +43,7 @@ export const ELIGIBLE = {
 export const NON_ELIGIBLE = new Set([
   'checker', 'joiner', 'dmsender', 'nitrosniper', 'giveawayfarmer',
   'friendcleaner', 'autoleave', 'otoreact', 'profilechanger', 'boostcheck',
+  'aichat', 'otomesaj',
 ]);
 
 /** Kullanıcının kasasındaki hesap indexlerini döndürür (yoksa boş) */

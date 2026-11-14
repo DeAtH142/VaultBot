@@ -85,15 +85,17 @@ export default {
             .setTitle(`${E.warning} Rol botu yapılandırılmamış`)
             .setDescription([
               `Kazanımların kaydedildi ama rol verilemiyor:`,
-              `> \`ROLE_BOT_TOKEN\` ortam değişkeni eksik.`,
+              `> \`REXAL_ROLES\` secret değişkeni eksik veya biçimi hatalı.`,
               `> Selfbot ile rol verilemez — gerçek bir bot token'ı gerekli.`,
               '',
-              '**Nasıl yapılır?**',
-              `> 1. discord.com/developers → New Application → Bot`,
-              `> 2. **Manage Roles** yetkisiyle sunucuya davet et`,
+              '**GitHub Secret (tek satır):**',
+              '```',
+              'REXAL_ROLES=BOT_TOKEN:SUNUCU_ID:1:ROL_ID,2:ROL_ID,3:ROL_ID',
+              '```',
+              '> 1. discord.com/developers → New Application → Bot → Reset Token',
+              `> 2. **Manage Roles** yetkisiyle davet et`,
               `> 3. Bot rolünü, verilecek rollerin ÜSTÜNE taşı`,
-              `> 4. \`.env\` dosyasına ekle: \`ROLE_BOT_TOKEN=...\``,
-              `> 5. \`ROLE_TIER_ROLES=1:ROL_ID,2:ROL_ID,...\``,
+              `> 4. GitHub → Settings → Secrets → \`REXAL_ROLES\` ekle`,
               '',
               `Bekleyen: ${pending.map(p => `tier ${p.tier}`).join(', ')}`,
             ].join('\n'))

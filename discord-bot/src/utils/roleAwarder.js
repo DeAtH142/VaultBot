@@ -5,11 +5,13 @@
 //
 // ⚠️ ÖNEMLİ: Bu repo SELF-BOT (kullanıcı hesabı token'ları) ile çalışır.
 // Selfbot ile rol VERİLEMEZ (Discord API kısıtı + ToS ihlali). Bu yüzden rol
-// verme için ayrı bir GERÇEK BOT TOKEN'i gerekir:
+// verme için GERÇEK bir BOT TOKEN'i gerekir:
 //
-//   ROLE_BOT_TOKEN = <gerçek bot token>          (zorunlu)
-//   AİT OLDUĞU SUNUCU  = ROLE_GUILD_ID           (opsiyonel, yoksa otomatik bulur)
-//   ROL HARİTASI       = ROLE_TIER_ROLES         ör. "1:123456789,2:987654321"
+//   REXAL_ROLES  = "BOT_TOKEN:SUNUCU_ID:tier:rolId,tier:rolId,..."
+//
+// Bu TEK secret hem botu, hem sunucuyu, hem rol eşleşmesini içerir.
+// Geriye dönük uyumluluk: ROLE_BOT_TOKEN / ROLE_GUILD_ID / ROLE_TIER_ROLES
+// ayrı tanımlıysa onlar da çalışır.
 //
 // Gerçek bot şu yetkilerle davet edilmeli:
 //   • sunucuda üye olmalı
@@ -25,8 +27,41 @@ let botClient = null;
 let botReady = null; // Promise
 let lastError = null;
 
+/**
+ * Tek secret'i çöz: "TOKEN:GuildID:tier:rolId,tier:rolId,..."
+ * Örnek: "MTIz....abc:1234567890123456789:1:111111111111111111,2:222222222222222222"
+ */
+export function parseRexalRoles() {
+  const raw = (process.env.REXAL_ROLES || '').trim();
+  const out = { token: '', guildId: '', tiers: {} };
+  if (!raw) return out;
+
+  const parts = raw.split(':');
+  if (parts.length < 3) {
+    console.error('[RoleAwarder] REXAL_ROLES formatı hatalı — "TOKEN:SUNUCU_ID:tier:rolId,..." olmalı');
+    return out;
+  }
+
+  // Discord bot token'ları nokta içerir ama ':' içermez → ilk parça token,
+  // ikinci parça sunucu ID, geri kalanı tier haritası (ve tier haritası rol ID içinde ':' yok).
+  out.token = parts[0];
+  out.guildId = parts[1];
+  const mapRaw = parts.slice(2).join(':');
+
+  for (const part of mapRaw.split(/[,\n;]+/)) {
+    const [tier, roleId] = part.split(':').map(s => s && s.trim());
+    if (tier && roleId && /^\d{5,}$/.test(roleId)) out.tiers[Number(tier)] = roleId;
+  }
+  return out;
+}
+
 /** Rol id haritası: "1:123,2:456" → { 1: '123', 2: '456' } */
 export function getTierRoleMap() {
+  // 1) Yeni tek-secret biçimi
+  const parsed = parseRexalRoles();
+  if (Object.keys(parsed.tiers).length > 0) return parsed.tiers;
+
+  // 2) Eski ayrı değişkenler (geriye dönük uyumluluk)
   const raw = (process.env.ROLE_TIER_ROLES || '').trim();
   const map = {};
   if (!raw) return map;
@@ -37,8 +72,18 @@ export function getTierRoleMap() {
   return map;
 }
 
+/** Rol botu token'ı (yeni tek-secret ya da eski değişken) */
+export function getRoleBotToken() {
+  return parseRexalRoles().token || (process.env.ROLE_BOT_TOKEN || '').trim();
+}
+
+/** Sunucu ID (yeni tek-secret ya da eski değişken) */
+export function getRoleGuildId() {
+  return parseRexalRoles().guildId || (process.env.ROLE_GUILD_ID || '').trim();
+}
+
 export function isRoleBotEnabled() {
-  return !!process.env.ROLE_BOT_TOKEN;
+  return !!getRoleBotToken();
 }
 
 /** Gerçek bot client'ını tembel başlat (tek kez) */
@@ -71,7 +116,7 @@ async function getBotClient() {
         resolve(null);
       });
 
-      botClient.login(process.env.ROLE_BOT_TOKEN).catch((err) => {
+      botClient.login(getRoleBotToken()).catch((err) => {
         clearTimeout(timeout);
         lastError = err.message;
         console.error('[RoleAwarder] Bot girişi başarısız:', err.message);
@@ -88,7 +133,7 @@ async function getBotClient() {
 
 /** Rolün verileceği sunucuyu seç */
 function pickGuild(client) {
-  const wanted = (process.env.ROLE_GUILD_ID || '').trim();
+  const wanted = getRoleGuildId();
   if (wanted) {
     return client.guilds.cache.get(wanted) || null;
   }
@@ -102,17 +147,17 @@ function pickGuild(client) {
 export async function awardTier(userId, tier, meta = {}) {
   const client = await getBotClient();
   if (!client) {
-    return { success: false, awarded: false, dm: false, error: lastError || 'ROLE_BOT_TOKEN ayarlanmamış veya bot açılamadı' };
+    return { success: false, awarded: false, dm: false, error: lastError || 'REXAL_ROLES ayarlanmamış veya bot açılamadı' };
   }
 
   const roleId = getTierRoleMap()[tier];
   if (!roleId) {
-    return { success: false, awarded: false, dm: false, error: `Tier ${tier} için ROLE_TIER_ROLES'ta rol ID tanımlı değil` };
+    return { success: false, awarded: false, dm: false, error: `Tier ${tier} için REXAL_ROLES'ta rol ID tanımlı değil` };
   }
 
   const guild = pickGuild(client);
   if (!guild) {
-    return { success: false, awarded: false, dm: false, error: 'Bot hiçbir sunucuda bulunamadı (ROLE_GUILD_ID ayarla)' };
+    return { success: false, awarded: false, dm: false, error: 'Bot hiçbir sunucuda bulunamadı (REXAL_ROLES içindeki sunucu ID hatalı)' };
   }
 
   // Botun rolü, verilecek rolün üstünde mi? (Discord kuralı)
