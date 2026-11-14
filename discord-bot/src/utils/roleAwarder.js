@@ -7,13 +7,13 @@
 // Selfbot ile rol VERİLEMEZ (Discord API kısıtı + ToS ihlali). Bu yüzden rol
 // verme için GERÇEK bir BOT TOKEN'i gerekir.
 //
-// Gerekli ortam değişkenleri (2 secret):
-//   ROLE_BOT_TOKEN   = <gerçek bot token>              (zorunlu)
-//   ROLE_SERVER_ID   = <sunucu ID>                     (zorunlu)
-//   ROLE_TIER_IDS    = 1:rolId,2:rolId,...,10:rolId    (zorunlu)
+// Gerekli ortam değişkenleri:
+//   DISCORD_TOKEN   = <bot token>                      (mevcut bot — ayrı token GEREKMEZ)
+//   ROLE_SERVER_ID  = <sunucu ID>                      (zorunlu)
+//   ROLE_TIER_IDS   = 1:rolId,2:rolId,...,10:rolId     (zorunlu)
 //
-// Geriye dönük uyumluluk: REXAL_ROLES (tek satır) veya ROLE_GUILD_ID /
-// ROLE_TIER_ROLES ayrı tanımlıysa onlar da çalışır.
+// Bot hem selfbot sistemlerini hem rol dağıtımını aynı token ile yapar.
+// Geriye dönük uyumluluk: ROLE_BOT_TOKEN / REXAL_ROLES tanımlıysa öncelik alır.
 //
 // Gerçek bot şu yetkilerle davet edilmeli:
 //   • sunucuda üye olmalı
@@ -79,9 +79,11 @@ export function getTierRoleMap() {
   return parseTierList((process.env.ROLE_TIER_ROLES || '').trim());
 }
 
-/** Rol botu token'ı */
+/** Rol dağıtımında kullanılacak token — özel token yoksa mevcut bot token'ı */
 export function getRoleBotToken() {
-  return (process.env.ROLE_BOT_TOKEN || '').trim() || parseRexalRoles().token;
+  return (process.env.ROLE_BOT_TOKEN || '').trim()
+    || parseRexalRoles().token
+    || (process.env.DISCORD_TOKEN || '').trim();
 }
 
 /** Rolün verileceği sunucu ID'si */

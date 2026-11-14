@@ -85,11 +85,10 @@ export default {
             .setTitle(`${E.warning} Rol botu yapılandırılmamış`)
             .setDescription([
               `Kazanımların kaydedildi ama rol verilemiyor:`,
-              `> \`ROLE_BOT_TOKEN\` eksik — selfbot rol veremez, gerçek bot token'ı gerekli.`,
+              `> \`DISCORD_TOKEN\` eksik — rol dağıtımı aynı bot ile yapılır.`,
               '',
               '**GitHub → Settings → Secrets → Actions:**',
               '```',
-              'ROLE_BOT_TOKEN = bot tokeni',
               'ROLE_SERVER_ID = sunucu ID',
               'ROLE_TIER_IDS  = 1:ROL,2:ROL,...,10:ROL',
               '```',

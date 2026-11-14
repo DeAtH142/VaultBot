@@ -29,7 +29,6 @@ jobs:
           DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }}
           FIREBASE_SERVICE_ACCOUNT=${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
-          ROLE_BOT_TOKEN=${{ secrets.ROLE_BOT_TOKEN }}
           ROLE_SERVER_ID=${{ secrets.ROLE_SERVER_ID }}
           ROLE_TIER_IDS=${{ secrets.ROLE_TIER_IDS }}
           EOF
@@ -44,7 +43,6 @@ jobs:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          ROLE_BOT_TOKEN: ${{ secrets.ROLE_BOT_TOKEN }}
           ROLE_SERVER_ID: ${{ secrets.ROLE_SERVER_ID }}
           ROLE_TIER_IDS: ${{ secrets.ROLE_TIER_IDS }}
         run: node src/index.js
