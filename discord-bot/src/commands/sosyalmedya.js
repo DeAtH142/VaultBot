@@ -69,7 +69,7 @@ async function analyzeWithGroq(imageBuffer, retryCount = 0) {
     },
     body: JSON.stringify({
       // GROQ GÜNCELLEMESİ: Eski model kapatıldı, yeni vizyon modeli eklendi.
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      model: 'llama-3.2-90b-vision-preview',
       messages: [
         {
           role: 'user',
@@ -140,7 +140,7 @@ async function analyzeWithGemini(imageBuffer) {
 
   const response = await fetch(
     // GEMINI GÜNCELLEMESİ: gemini-2.5-flash henüz stabil değil, 1.5-flash en iyisidir.
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
