@@ -2,9 +2,8 @@ name: VaultBot 7-24 Advanced
 
 on:
   schedule:
-    # Her 5 saatte bir çalışır (280 dakikalık çalışma süresine denk gelir)
     - cron: '0 */5 * * *'
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch:
 
 concurrency:
   group: vaultbot-run
@@ -19,12 +18,11 @@ jobs:
       - name: 📥 Kodu Çek
         uses: actions/checkout@v4
 
-      - name: 🟢 Node.js Kur ve Önbelleği Ayarla
+      - name: 🟢 Node.js Kur
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: './discord-bot/package-lock.json'
+          # 🚨 CACHE AYARLARINI KALDIRDIK (Hata veriyordu)
 
       - name: 🛠️ Sistem Araçlarını Kur (FFmpeg ve Zip)
         run: |
@@ -71,7 +69,7 @@ jobs:
         run: node src/index.js
 
       - name: ☁️ Firebase'e Verileri Yükle (Push)
-        if: always() # Bot hata verse veya dursa bile verileri kaydet!
+        if: always()
         working-directory: ./discord-bot
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
