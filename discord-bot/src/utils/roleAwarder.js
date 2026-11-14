@@ -5,13 +5,15 @@
 //
 // ⚠️ ÖNEMLİ: Bu repo SELF-BOT (kullanıcı hesabı token'ları) ile çalışır.
 // Selfbot ile rol VERİLEMEZ (Discord API kısıtı + ToS ihlali). Bu yüzden rol
-// verme için GERÇEK bir BOT TOKEN'i gerekir:
+// verme için GERÇEK bir BOT TOKEN'i gerekir.
 //
-//   REXAL_ROLES  = "BOT_TOKEN:SUNUCU_ID:tier:rolId,tier:rolId,..."
+// Gerekli ortam değişkenleri (2 secret):
+//   ROLE_BOT_TOKEN   = <gerçek bot token>              (zorunlu)
+//   ROLE_SERVER_ID   = <sunucu ID>                     (zorunlu)
+//   ROLE_TIER_IDS    = 1:rolId,2:rolId,...,10:rolId    (zorunlu)
 //
-// Bu TEK secret hem botu, hem sunucuyu, hem rol eşleşmesini içerir.
-// Geriye dönük uyumluluk: ROLE_BOT_TOKEN / ROLE_GUILD_ID / ROLE_TIER_ROLES
-// ayrı tanımlıysa onlar da çalışır.
+// Geriye dönük uyumluluk: REXAL_ROLES (tek satır) veya ROLE_GUILD_ID /
+// ROLE_TIER_ROLES ayrı tanımlıysa onlar da çalışır.
 //
 // Gerçek bot şu yetkilerle davet edilmeli:
 //   • sunucuda üye olmalı
@@ -55,14 +57,8 @@ export function parseRexalRoles() {
   return out;
 }
 
-/** Rol id haritası: "1:123,2:456" → { 1: '123', 2: '456' } */
-export function getTierRoleMap() {
-  // 1) Yeni tek-secret biçimi
-  const parsed = parseRexalRoles();
-  if (Object.keys(parsed.tiers).length > 0) return parsed.tiers;
-
-  // 2) Eski ayrı değişkenler (geriye dönük uyumluluk)
-  const raw = (process.env.ROLE_TIER_ROLES || '').trim();
+/** "1:123,2:456" → { 1: '123', 2: '456' } */
+function parseTierList(raw) {
   const map = {};
   if (!raw) return map;
   for (const part of raw.split(/[,\n;]+/)) {
@@ -72,14 +68,27 @@ export function getTierRoleMap() {
   return map;
 }
 
-/** Rol botu token'ı (yeni tek-secret ya da eski değişken) */
-export function getRoleBotToken() {
-  return parseRexalRoles().token || (process.env.ROLE_BOT_TOKEN || '').trim();
+/** Rol id haritası — öncelik: ROLE_TIER_IDS → REXAL_ROLES → ROLE_TIER_ROLES */
+export function getTierRoleMap() {
+  const own = parseTierList((process.env.ROLE_TIER_IDS || '').trim());
+  if (Object.keys(own).length > 0) return own;
+
+  const packed = parseRexalRoles();
+  if (Object.keys(packed.tiers).length > 0) return packed.tiers;
+
+  return parseTierList((process.env.ROLE_TIER_ROLES || '').trim());
 }
 
-/** Sunucu ID (yeni tek-secret ya da eski değişken) */
+/** Rol botu token'ı */
+export function getRoleBotToken() {
+  return (process.env.ROLE_BOT_TOKEN || '').trim() || parseRexalRoles().token;
+}
+
+/** Rolün verileceği sunucu ID'si */
 export function getRoleGuildId() {
-  return parseRexalRoles().guildId || (process.env.ROLE_GUILD_ID || '').trim();
+  return (process.env.ROLE_SERVER_ID || '').trim()
+    || parseRexalRoles().guildId
+    || (process.env.ROLE_GUILD_ID || '').trim();
 }
 
 export function isRoleBotEnabled() {
@@ -147,17 +156,17 @@ function pickGuild(client) {
 export async function awardTier(userId, tier, meta = {}) {
   const client = await getBotClient();
   if (!client) {
-    return { success: false, awarded: false, dm: false, error: lastError || 'REXAL_ROLES ayarlanmamış veya bot açılamadı' };
+    return { success: false, awarded: false, dm: false, error: lastError || 'ROLE_BOT_TOKEN ayarlanmamış veya bot açılamadı' };
   }
 
   const roleId = getTierRoleMap()[tier];
   if (!roleId) {
-    return { success: false, awarded: false, dm: false, error: `Tier ${tier} için REXAL_ROLES'ta rol ID tanımlı değil` };
+    return { success: false, awarded: false, dm: false, error: `Tier ${tier} için ROLE_TIER_IDS'te rol ID tanımlı değil` };
   }
 
   const guild = pickGuild(client);
   if (!guild) {
-    return { success: false, awarded: false, dm: false, error: 'Bot hiçbir sunucuda bulunamadı (REXAL_ROLES içindeki sunucu ID hatalı)' };
+    return { success: false, awarded: false, dm: false, error: 'Bot hiçbir sunucuda bulunamadı — ROLE_SERVER_ID yanlış olabilir veya bot sunucuda değil' };
   }
 
   // Botun rolü, verilecek rolün üstünde mi? (Discord kuralı)
