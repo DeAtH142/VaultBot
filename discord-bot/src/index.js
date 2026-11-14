@@ -29,12 +29,9 @@ import { startSubscriptionChecker } from './utils/subscriptionChecker.js';
 
 dotenv.config();
 
-let playtimeStarted = false; // süre motoru interval'ları tek kez başlasın
+let playtimeStarted = false; 
 
 // ── Tek-instance kilidi ─────────────────────────────────────────
-// Aynı token ile iki bot aynı anda çalışırsa Discord etkileşimleri iki process
-// arasında rastgele dağıtılır → "Unknown interaction (10062)" hataları başlar.
-// Bu kilit ikinci kopyanın başmasını engeller.
 import os from 'node:os';
 const LOCK_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'bot.lock');
 try {
@@ -42,10 +39,10 @@ try {
     const oldPid = parseInt(fs.readFileSync(LOCK_PATH, 'utf8').trim(), 10);
     if (oldPid && oldPid !== process.pid) {
       try {
-        process.kill(oldPid, 0); // canlı mı?
+        process.kill(oldPid, 0); 
         console.error(`❌ Bot zaten çalışıyor (PID ${oldPid})! İkinci kopya başlatılmaz.\n   Önce eski botu kapat: taskkill /PID ${oldPid} /F`);
         process.exit(1);
-      } catch { /* eski süreç ölmüş — kilit bayat, devam */ }
+      } catch { }
     }
   }
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
@@ -79,7 +76,6 @@ for (const file of commandFiles) {
   const { default: command } = await import(filePath);
   if (command?.name) {
     client.commands.set(command.name, command);
-    // Alias desteği
     if (command.aliases) {
       for (const alias of command.aliases) {
         client.commands.set(alias, command);
@@ -91,37 +87,35 @@ for (const file of commandFiles) {
 console.log(`📦 ${client.commands.size} komut yüklendi.`);
 
 // ── customId yönlendirmesi ──────────────────────────────────────────────────
-// Paneller customId'lerinde farklı prefix kullanıyor (vault:..., aktif:...).
-// Bu prefixleri ilgili komutlara yönlendiriyoruz.
 const CUSTOM_ID_ROUTES = {
-  vault: 'hesaplarim',   // Token Kasası paneli butonları
-  aktif: 'online',       // Online tutma paneli butonları
+  vault: 'hesaplarim',
+  aktif: 'online',
   tokensil: 'tokensil',
-  owo: 'owo',            // OwO paneli
-  autotyper: 'autotyper',// AutoTyper paneli
-  voiceafk: 'voiceafk',  // Ses AFK paneli
-  otoreact: 'otoreact',  // Oto React paneli
-  autoleave: 'autoleave',// Auto-Leave paneli
-  joiner: 'joiner',      // Token Joiner paneli
-  profilechanger: 'profilechanger', // Profile Changer paneli
-  friendcleaner: 'friendcleaner',   // Arkadaş Temizleyici paneli
-  checker: 'checker',               // Token Denetleyici paneli
-  otomesaj: 'otomesaj',             // Oto Mesaj/Post paneli
-  dmsender: 'dmsender',             // Toplu DM paneli
-  giveawayfarmer: 'giveawayfarmer', // Giveaway Farmer paneli
-  nitrosniper: 'nitrosniper',       // Nitro Sniper paneli
-  aichat: 'aichat',                 // AI Chat paneli
-  boostcheck: 'boostcheck',         // Boost Kontrol paneli
-  template: 'template',             // Pro Sunucu Template paneli
-  mobil: 'mobil',                   // Mobil Status paneli
-  surem: 'surem',                   // ⏱️ Süre & Rol İlerleme paneli
-  otobump: 'otobump',               // 🚀 Oto Bump paneli
-  mcafk: 'mcafk',                   // Minecraft AFK paneli
-  spotify: 'spotify',               // Spotify Fake Presence paneli
-  rolver: 'rolver',                 // 👑 Rol verme paneli
-  rolal: 'rolal',                   // 🗑️ Rol alma paneli
-  rol: 'rol',                       // 🎭 Hızlı Rol Verme paneli (Yeni)
-  vaultsettings: 'vaultsettings',   // 🔧 Vault Admin paneli
+  owo: 'owo',
+  autotyper: 'autotyper',
+  voiceafk: 'voiceafk',
+  otoreact: 'otoreact',
+  autoleave: 'autoleave',
+  joiner: 'joiner',
+  profilechanger: 'profilechanger',
+  friendcleaner: 'friendcleaner',
+  checker: 'checker',
+  otomesaj: 'otomesaj',
+  dmsender: 'dmsender',
+  giveawayfarmer: 'giveawayfarmer',
+  nitrosniper: 'nitrosniper',
+  aichat: 'aichat',
+  boostcheck: 'boostcheck',
+  template: 'template',
+  mobil: 'mobil',
+  surem: 'surem',
+  otobump: 'otobump',
+  mcafk: 'mcafk',
+  spotify: 'spotify',
+  rolver: 'rolver',
+  rolal: 'rolal',
+  rol: 'rol',
+  vaultsettings: 'vaultsettings',
 };
 
 function resolveCommand(name) {
@@ -140,16 +134,11 @@ client.once('ready', () => {
   console.log('╚══════════════════════════════════════════╝');
   console.log('');
 
-  // Bulut senkronu (GitHub Actions / ephemeral ortamlarda kalıcılık sağlar)
   startPeriodicPush();
-
-  // ⏰ Abonelik süre kontrolü başlat
   startSubscriptionChecker(client);
 
-  // ⏱️ Süre motoru: bot kapalıyken geçen süre sayılmasın diye önceki oturumlar
-  // canlılık damgası (lastSeen) anında kesilir; sonra recovery'ler çalışır.
   try {
-    resetLiveKeys(); // modüller kendini yeniden register edecek
+    resetLiveKeys(); 
     const rec = reconcileOnBoot();
     if (rec.reports.length > 0) {
       const total = rec.reports.reduce((a, r) => a + r.seconds, 0);
@@ -178,13 +167,12 @@ client.once('ready', () => {
   recoverBotKeeper().catch(console.error);
   recoverBumpJobs().catch(console.error);
 
-  // Recovery başladıktan sonra canlı sistemleri süre motoruna kaydet
-  setTimeout(registerExistingSessions, 10 * 1000);
+  // 30 saniye bekle, tüm sistemler otursun, sonra süreyi kaydet (10sn çok erkendi)
+  setTimeout(registerExistingSessions, 30 * 1000);
 
-  // 🎖️ Bot kapalıyken verilemeyen roller varsa şimdi tekrar dene
   setTimeout(() => {
     processPendingAwards().catch(err => console.error('[Playtime] Bekleyen rol dağıtımı hatası:', err.message));
-  }, 15 * 1000);
+  }, 45 * 1000);
 });
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
@@ -193,8 +181,7 @@ const PREFIX = '!';
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   
-  // ── RX- Kod Kullanma Sistemi (YENİ) ──
-  // Eğer mesaj RX- ile başlıyorsa, bu bir kod kullanma isteğidir.
+  // RX- Kod Kullanma Sistemi
   if (message.content.startsWith('RX-')) {
     const codeCommand = client.commands.get('code');
     if (codeCommand) {
@@ -204,10 +191,10 @@ client.on('messageCreate', async (message) => {
         console.error('❌ Kod kullanma hatası:', err);
       }
     }
-    return; // Kodu işledik, aşağıdaki ! komutlarını kontrol etmesine gerek yok
+    return; 
   }
   
-  // Sosyal medya doğrulama sistemi (ekran görüntüsü kontrolü)
+  // Sosyal medya doğrulama sistemi
   try {
     await handleVerificationMessage(message);
   } catch (err) {
@@ -233,9 +220,6 @@ client.on('messageCreate', async (message) => {
 // ── Buton / Select Menu etkileşimleri ───────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
   try {
-    // customId formatı: "komutAdı:aksiyon" veya "komutAdı:aksiyon:ekBilgi"
-    // customId yalnızca buton / select menu / modal etkileşimlerinde bulunur;
-    // diğer etkileşim tiplerinde (slash komut, autocomplete vb.) undefined'dır.
     const parts = interaction.customId?.split(':') ?? [];
     const cmdName = parts[0];
 
@@ -262,7 +246,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// ── Process-seviyesi güvenlik (crash'lerde bot ölmesin) ──────────────
+// ── Process-seviyesi güvenlik ──────────────
 process.on('unhandledRejection', (err) => {
   console.error('⚠️ [UnhandledRejection]', err);
 });
@@ -271,7 +255,7 @@ process.on('uncaughtException', (err) => {
   console.error('💥 [UncaughtException] Bot ayakta kalmaya devam ediyor:', err);
 });
 
-// ── Buluttan state indir (varsa) ve giriş yap ────────────────────────────
+// ── Buluttan state indir ve giriş yap ────────────────────────────
 if (isCloudEnabled()) {
   pullFromCloud()
     .catch(err => console.error('[CloudStore] Bulut indirilemedi, lokal data ile devam:', err.message))
@@ -280,31 +264,30 @@ if (isCloudEnabled()) {
   client.login(process.env.DISCORD_TOKEN);
 }
 
-// ── ⏱️ Süre motoru: heartbeat + periyodik tutarlılık senkronu ─────────────
+// ── ⏱️ Süre motoru ─────────────
 function startPlaytimeEngine() {
   if (playtimeStarted) return;
   playtimeStarted = true;
 
-  // 30 sn'de bir: canlı oturumların lastSeen damgasını tazele.
-  // Bot bir anda ölürse, kaydedilen son damga dışında süre asla eklenmez.
   setInterval(() => {
     try { heartbeat(); } catch (err) { console.error('[Playtime] heartbeat hatası:', err.message); }
   }, 30 * 1000);
 
-  // 60 sn'de bir: modüller gerçekten çalışıyor mu? (ölü sayaçları kapat)
+  // Her 60 saniyede bir kontrol et. Hata çıksa bile DÖNGÜ DEVAM ETSİN.
   setInterval(() => {
     try {
       const users = new Set(listTrackedUsers());
-      for (const userId of users) syncUser(userId);
+      for (const userId of users) {
+        try {
+          syncUser(userId);
+        } catch (userErr) {
+          console.warn(`[Playtime] ${userId} senkron edilemedi:`, userErr.message);
+        }
+      }
     } catch (err) {
-      console.error('[Playtime] senkron hatası:', err.message);
+      console.error('[Playtime] genel senkron hatası:', err.message);
     }
   }, 60 * 1000);
-
-  // 45 sn'de bir: kayıtlı kullanıcıları yeniden senkronla (fallback)
-  setTimeout(() => {
-    try { registerExistingSessions(); } catch (err) { console.error('[Playtime] ilk senkron hatası:', err.message); }
-  }, 45 * 1000);
 }
 
 /** Reboot recovery bittikten sonra gerçekten çalışan modülleri kayıt altına al */
@@ -313,8 +296,15 @@ function registerExistingSessions() {
     const users = getPlaytimeUsers();
     let active = 0;
     for (const userId of users) {
-      const res = syncUser(userId);
-      active += res.active.length;
+      try {
+        const res = syncUser(userId);
+        // Eğer res veya res.active yoksa hata vermesini engelliyoruz (BUG FIX)
+        if (res && Array.isArray(res.active)) {
+          active += res.active.length;
+        }
+      } catch (userErr) {
+        console.warn(`[Playtime] ${userId} başlangıç kaydı yapılamadı:`, userErr.message);
+      }
     }
     if (active > 0) console.log(`⏱️ [Playtime] ${active} canlı sistem süre motoruna kaydedildi.`);
   } catch (err) {
@@ -322,7 +312,7 @@ function registerExistingSessions() {
   }
 }
 
-// ── Graceful shutdown: çıkarken son durumu buluta yaz ──────────────────
+// ── Graceful shutdown ──────────────────
 async function gracefulShutdown(reason) {
   console.log(`\n🛑 Bot kapatılıyor (${reason})...`);
   try { closeAllOnShutdown(); } catch (err) { console.error('[Playtime] Kapanış hatası:', err.message); }
