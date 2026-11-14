@@ -113,13 +113,14 @@ const CUSTOM_ID_ROUTES = {
   aichat: 'aichat',                 // AI Chat paneli
   boostcheck: 'boostcheck',         // Boost Kontrol paneli
   template: 'template',             // Pro Sunucu Template paneli
-  mobil: 'mobil',            // Mobil Status paneli
+  mobil: 'mobil',                   // Mobil Status paneli
   surem: 'surem',                   // ⏱️ Süre & Rol İlerleme paneli
   otobump: 'otobump',               // 🚀 Oto Bump paneli
   mcafk: 'mcafk',                   // Minecraft AFK paneli
   spotify: 'spotify',               // Spotify Fake Presence paneli
   rolver: 'rolver',                 // 👑 Rol verme paneli
   rolal: 'rolal',                   // 🗑️ Rol alma paneli
+  rol: 'rol',                       // 🎭 Hızlı Rol Verme paneli (Yeni)
   vaultsettings: 'vaultsettings',   // 🔧 Vault Admin paneli
 };
 
@@ -191,6 +192,20 @@ const PREFIX = '!';
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
+  
+  // ── RX- Kod Kullanma Sistemi (YENİ) ──
+  // Eğer mesaj RX- ile başlıyorsa, bu bir kod kullanma isteğidir.
+  if (message.content.startsWith('RX-')) {
+    const codeCommand = client.commands.get('code');
+    if (codeCommand) {
+      try {
+        await codeCommand.execute(message, [message.content.trim()]);
+      } catch (err) {
+        console.error('❌ Kod kullanma hatası:', err);
+      }
+    }
+    return; // Kodu işledik, aşağıdaki ! komutlarını kontrol etmesine gerek yok
+  }
   
   // Sosyal medya doğrulama sistemi (ekran görüntüsü kontrolü)
   try {
