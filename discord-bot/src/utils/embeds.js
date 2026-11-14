@@ -679,3 +679,122 @@ export function createBumpComponents(hasJobs = false) {
     ),
   ];
 }
+
+// ═══════════════════════════
+// 🚀  OTO BUMP — PANEL (OwO tarzı, herkes kendi)
+// ═══════════════════════════════
+
+/**
+ * 🎛️ PANEL — her kullanıcı kendi işlerini görür (ephemeral butonlar)
+ * OwO paneliyle aynı akış: tek panel → hesap seç → ayar formu
+ */
+export function createBumpPanelEmbed(user, jobs = [], tokens = []) {
+  const running = jobs.filter(j => j.running);
+  const totalBumps = jobs.reduce((a, j) => a + (j.totalBumps || 0), 0);
+  const bestStreak = jobs.reduce((a, j) => Math.max(a, j.bestStreak || 0), 0);
+  const todayCount = jobs.reduce((a, j) => a + (j.success || 0), 0);
+  const nextJob = running
+    .filter(j => j.nextInSec > 0)
+    .sort((a, b) => a.nextInSec - b.nextInSec)[0];
+
+  let jobLines;
+  if (jobs.length === 0) {
+    jobLines = '> 🤍 *Henüz bump işin yok* — aşağıdaki **➕ Hesap Seç & Başlat** ile oluştur';
+  } else {
+    jobLines = jobs.map((j, i) => {
+      const bot = BUMP_BOTS[j.botKey] || BUMP_BOTS.disboard;
+      const cd = j.nextInSec > 0 ? `⏳ \`${durText(j.nextInSec)}\`` : '🔥 **şimdi**';
+      const fail = j.consecutiveFails > 0 ? ` ⚠️\`${j.consecutiveFails}\`` : '';
+      return `> ${bot.emoji} **${bot.name}** · sunucu \`${j.guildId}\`\n>    ${cd} · ✅ \`${j.totalBumps || 0}\` bump${fail}`;
+    }).join('\n');
+  }
+
+  const readyTokens = tokens.length
+    ? `> ${E.check} Kasanda **${tokens.length}** hesap hazır`
+    : `> ${E.warning} Kasanda hesap yok — \`!hesaplarim\` ile ekle`;
+
+  return new EmbedBuilder()
+    .setAuthor({
+      name: `${BRAND.name} • Bump Control Center ${BRAND.version}`,
+      iconURL: user?.displayAvatarURL?.({ dynamic: true, size: 64 }),
+    })
+    .setColor(running.length ? COLORS.gold : COLORS.vault)
+    .setTitle(`${E.rocket}  REXAL — OTO BUMP ${running.length ? '' : '(BEKLEMEDE)'}`)
+    .setThumbnail(user?.displayAvatarURL?.({ dynamic: true, size: 256 }))
+    .setDescription([
+      UX.header,
+      statusLine([
+        [running.length ? E.online : E.offline, 'MOTOR', running.length ? `AKTİF (${running.length})` : 'PASİF'],
+        [E.chart, 'BUMP', String(totalBumps)],
+        [E.fire, 'SERİ', String(bestStreak)],
+      ]),
+      UX.footerLine,
+      '',
+      `${E.clock} **SIRADAKİ BUMP**`,
+      nextJob
+        ? `> ${(BUMP_BOTS[nextJob.botKey] || BUMP_BOTS.disboard).emoji} **${durText(nextJob.nextInSec)}** sonra → <t:${Math.floor(nextJob.nextAt / 1000)}:t>`
+        : `> \`—\` *Planlanmış bump yok*`,
+      '',
+      `${E.rocket} **İŞLERİN (${jobs.length})**`,
+      jobLines,
+      '',
+      `${THIN_DIVIDER}`,
+      `${E.info} **HESAPLAR**`,
+      readyTokens,
+      `${E.star} *Toplam ${todayCount} başarılı bump*`,
+      '',
+      `${E.target} *Kontrol paneli aşağıda ↓ — tüm butonlar sadece sana görünür*`,
+    ].join('\n'))
+    .setFooter(BRAND.footer('Bump Engine • Anti-Detect • Gerçek Cooldown'))
+    .setTimestamp();
+}
+
+/** Panel butonları — OwO stili, tek panel */
+export function createBumpPanelComponents(hasJobs = false, hasTokens = false) {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('otobump:ekle')
+        .setLabel('Hesap Seç & Başlat')
+        .setEmoji('➕')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(!hasTokens),
+      new ButtonBuilder()
+        .setCustomId('otobump:kaldir')
+        .setLabel('Durdur / Kaldır')
+        .setEmoji('🛑')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(!hasJobs),
+      new ButtonBuilder()
+        .setCustomId('otobump:rapor')
+        .setLabel('Rapor')
+        .setEmoji('📊')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(!hasJobs),
+      new ButtonBuilder()
+        .setCustomId('otobump:botlar')
+        .setLabel('Bump Botları')
+        .setEmoji('🤖')
+        .setStyle(ButtonStyle.Secondary),
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('otobump:force')
+        .setLabel('Şimdi Dene')
+        .setEmoji('⚡')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(!hasJobs),
+      new ButtonBuilder()
+        .setCustomId('otobump:yenile')
+        .setLabel('Yenile')
+        .setEmoji('🔄')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId('otobump:tumunudurdur')
+        .setLabel('Tümünü Durdur')
+        .setEmoji('⛔')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(!hasJobs),
+    ),
+  ];
+}
