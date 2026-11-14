@@ -4,7 +4,8 @@ import https from 'https';
 import http from 'http';
 
 // ── Sabitler ────────────────────────────────────────────────────────────
-const VERIFICATION_CHANNEL_ID = '1571141518138544248';
+// DİKKAT: Buradaki ID'lerin yeni sunucudaki kanal ve rollere ait olduğundan emin ol!
+const VERIFICATION_CHANNEL_ID = '1571141518138544248'; 
 const FOLLOW_ROLE_ID = '1569793657261793394';
 const COMMENT_ROLE_ID = '1569795654124052671';
 
@@ -67,7 +68,8 @@ async function analyzeWithGroq(imageBuffer, retryCount = 0) {
       'Authorization': `Bearer ${GROQ_API_KEY}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.2-90b-vision-preview',
+      // GROQ GÜNCELLEMESİ: Eski model kapatıldı, yeni vizyon modeli eklendi.
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
       messages: [
         {
           role: 'user',
@@ -137,7 +139,8 @@ async function analyzeWithGemini(imageBuffer) {
 }`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    // GEMINI GÜNCELLEMESİ: gemini-2.5-flash henüz stabil değil, 1.5-flash en iyisidir.
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -164,7 +167,8 @@ async function analyzeWithGemini(imageBuffer) {
   );
 
   if (!response.ok) {
-    throw new Error(`Gemini API hatası: ${response.status}`);
+    const errText = await response.text().catch(()=> '');
+    throw new Error(`Gemini API hatası: ${response.status} - ${errText}`);
   }
 
   const data = await response.json();
