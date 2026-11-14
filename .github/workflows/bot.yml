@@ -1,9 +1,10 @@
-name: VaultBot 7-24
+name: VaultBot 7-24 Advanced
 
 on:
   schedule:
+    # Her 5 saatte bir çalışır (280 dakikalık çalışma süresine denk gelir)
     - cron: '0 */5 * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Manuel başlatma butonu
 
 concurrency:
   group: vaultbot-run
@@ -15,14 +16,26 @@ jobs:
     timeout-minutes: 280
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: 📥 Kodu Çek
+        uses: actions/checkout@v4
+
+      - name: 🟢 Node.js Kur ve Önbelleği Ayarla
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Bagimliliklari kur
+          cache: 'npm'
+          cache-dependency-path: './discord-bot/package-lock.json'
+
+      - name: 🛠️ Sistem Araçlarını Kur (FFmpeg ve Zip)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg zip unzip
+
+      - name: 📦 Bağımlılıkları Kur
         working-directory: ./discord-bot
         run: npm install
-      - name: .env olustur
+
+      - name: 📝 .env Dosyasını Oluştur
         working-directory: ./discord-bot
         run: |
           cat > .env <<'EOF'
@@ -33,13 +46,17 @@ jobs:
           ROLE_TIER_IDS=${{ secrets.ROLE_TIER_IDS }}
           GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_KEY=${{ secrets.CLOUDFLARE_API_KEY }}
           EOF
-      - name: Firebase'den verileri cek (Pull)
+
+      - name: ☁️ Firebase'den Verileri Çek (Pull)
         working-directory: ./discord-bot
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node scripts/cloud-sync.js pull
-      - name: Botu calistir
+
+      - name: 🤖 Botu Çalıştır
         working-directory: ./discord-bot
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
@@ -49,9 +66,12 @@ jobs:
           ROLE_TIER_IDS: ${{ secrets.ROLE_TIER_IDS }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
         run: node src/index.js
-      - name: Firebase'e verileri yukle (Push)
-        if: always()
+
+      - name: ☁️ Firebase'e Verileri Yükle (Push)
+        if: always() # Bot hata verse veya dursa bile verileri kaydet!
         working-directory: ./discord-bot
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
