@@ -31,6 +31,8 @@ jobs:
           ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
           ROLE_SERVER_ID=${{ secrets.ROLE_SERVER_ID }}
           ROLE_TIER_IDS=${{ secrets.ROLE_TIER_IDS }}
+          GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           EOF
       - name: Firebase'den verileri cek (Pull)
         working-directory: ./discord-bot
@@ -45,6 +47,8 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           ROLE_SERVER_ID: ${{ secrets.ROLE_SERVER_ID }}
           ROLE_TIER_IDS: ${{ secrets.ROLE_TIER_IDS }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node src/index.js
       - name: Firebase'e verileri yukle (Push)
         if: always()

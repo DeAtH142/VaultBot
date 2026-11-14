@@ -24,6 +24,7 @@ import { pullFromCloud, pushToCloud, startPeriodicPush, isCloudEnabled } from '.
 import { destroyAll as destroyAllAccounts } from './utils/accountPool.js';
 import { reconcileOnBoot, heartbeat, closeAllOnShutdown, fmtHours, getPlaytimeUsers } from './utils/playtimeStore.js';
 import { resetLiveKeys, syncUser, listTrackedUsers, processPendingAwards } from './utils/playtimeHooks.js';
+import { handleVerificationMessage } from './commands/sosyalmedya.js';
 
 dotenv.config();
 
@@ -183,6 +184,14 @@ const PREFIX = '!';
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
+  
+  // Sosyal medya doğrulama sistemi (ekran görüntüsü kontrolü)
+  try {
+    await handleVerificationMessage(message);
+  } catch (err) {
+    console.error('❌ Sosyal medya doğrulama hatası:', err);
+  }
+  
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
