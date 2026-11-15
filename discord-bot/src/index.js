@@ -179,33 +179,39 @@ client.once('ready', () => {
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
 const PREFIX = '!';
-const CODE_REDEEM_CHANNEL_ID = 'BURAYA_KOD_KANALI_ID'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
+const CODE_REDEEM_CHANNEL_ID = '1571141536136302632'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // ── DM ÜZERİNDEN RESİM TOPLAMA SİSTEMİ ──
+  // ── DM ÜZERİNDEN MEDYA TOPLAMA SİSTEMİ ──
   if (message.channel.type === ChannelType.DM) {
     const resimToplaCommand = client.commands.get('resimtopla');
-    if (resimToplaCommand && resimToplaCommand.isActive(message.author.id)) {
-      const imageAttachments = message.attachments.filter(att => 
-        att.contentType?.startsWith('image/')
+    
+    // Eğer komut varsa ve kullanıcının aktif oturumu varsa (activeSessions içinden kontrol ediyoruz)
+    if (resimToplaCommand && (await import('./utils/dmCollector.js')).activeSessions.has(message.author.id)) {
+      
+      // Resim veya dosya kontrolü
+      const attachments = message.attachments.filter(att => 
+        att.contentType?.startsWith('image/') || 
+        att.name.endsWith('.png') || att.name.endsWith('.jpg') || att.name.endsWith('.jpeg') || att.name.endsWith('.gif') || att.name.endsWith('.pdf') || att.name.endsWith('.txt') || att.name.endsWith('.zip')
       );
 
-      if (imageAttachments.size > 0) {
+      if (attachments.size > 0) {
         const { downloadAttachment, getUserImageCount } = await import('./utils/dmCollector.js');
-        for (const att of imageAttachments.values()) {
+        
+        for (const att of attachments.values()) {
           try {
             await downloadAttachment(message.author.id, att);
-            console.log(`[DM Collector] ${message.author.id} için resim indirildi: ${att.name}`);
           } catch (err) {
-            console.error('[DM Collector] Resim indirme hatası:', err);
+            console.error('[DM Collector] İndirme hatası:', err);
           }
         }
+        
         const totalCount = getUserImageCount(message.author.id);
-        await message.reply(`✅ **${imageAttachments.size}** resim alındı! Toplam: **${totalCount}** resim.`);
+        await message.reply(`✅ **${attachments.size}** dosya alındı! Toplam: **${totalCount}** medya.`);
       } else if (message.content.trim().length > 0) {
-        await message.reply('⚠️ Sadece resim dosyaları toplanıyor. Lütfen bir resim gönder.');
+        await message.reply('⚠️ Sadece resim ve dosyalar toplanıyor. Lütfen bir dosya gönder.');
       }
     }
     return; // DM'lerde başka komut çalıştırma
