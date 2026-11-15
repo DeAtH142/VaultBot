@@ -1,5 +1,5 @@
 // src/index.js
-import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
+import { Client, Collection, GatewayIntentBits, Partials, ChannelType } from 'discord.js';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,7 +40,7 @@ try {
     if (oldPid && oldPid !== process.pid) {
       try {
         process.kill(oldPid, 0); 
-        console.error(`❌ Bot zaten çalışıyor (PID ${oldPid})! İkinci kopya başlatılmaz.\n   Önce eski botu kapat: taskkill /PID ${oldPid} /F`);
+        console.error(`❌ Bot zaten çalışıyor (PID ${oldPid})! İkinci kopya başlatılmaz.`);
         process.exit(1);
       } catch { }
     }
@@ -48,12 +48,13 @@ try {
   fs.mkdirSync(path.dirname(LOCK_PATH), { recursive: true });
   fs.writeFileSync(LOCK_PATH, String(process.pid), 'utf8');
 } catch (err) {
-  console.warn('⚠️ Kilit dosyası yazılamadı (devam ediliyor):', err.message);
+  console.warn('⚠️ Kilit dosyası yazılamadı:', err.message);
 }
 process.on('exit', () => { try { if (fs.readFileSync(LOCK_PATH, 'utf8').trim() === String(process.pid)) fs.unlinkSync(LOCK_PATH); } catch {} });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// 🚨 BOT AYARLARI VE İZİNLER (EKran görüntüsüne göre tamamen doğru)
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -61,8 +62,9 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages, 
   ],
-  partials: [Partials.Message, Partials.Channel],
+  partials: [Partials.Message, Partials.Channel, Partials.DirectMessage],
 });
 
 client.commands = new Collection();
@@ -88,35 +90,14 @@ console.log(`📦 ${client.commands.size} komut yüklendi.`);
 
 // ── customId yönlendirmesi ──────────────────────────────────────────────────
 const CUSTOM_ID_ROUTES = {
-  vault: 'hesaplarim',
-  aktif: 'online',
-  tokensil: 'tokensil',
-  owo: 'owo',
-  autotyper: 'autotyper',
-  voiceafk: 'voiceafk',
-  otoreact: 'otoreact',
-  autoleave: 'autoleave',
-  sespaneli: 'sespaneli',
-  joiner: 'joiner',
-  profilechanger: 'profilechanger',
-  friendcleaner: 'friendcleaner',
-  checker: 'checker',
-  otomesaj: 'otomesaj',
-  dmsender: 'dmsender',
-  giveawayfarmer: 'giveawayfarmer',
-  nitrosniper: 'nitrosniper',
-  aichat: 'aichat',
-  boostcheck: 'boostcheck',
-  template: 'template',
-  mobil: 'mobil',
-  surem: 'surem',
-  otobump: 'otobump',
-  mcafk: 'mcafk',
-  spotify: 'spotify',
-  rolver: 'rolver',
-  rolal: 'rolal',
-  rol: 'rol',
-  code: 'code', // 🎁 Kod Panel sistemi eklendi
+  vault: 'hesaplarim', aktif: 'online', tokensil: 'tokensil', owo: 'owo', autotyper: 'autotyper',
+  voiceafk: 'voiceafk', otoreact: 'otoreact', autoleave: 'autoleave', joiner: 'joiner',
+  profilechanger: 'profilechanger', friendcleaner: 'friendcleaner', checker: 'checker',
+  otomesaj: 'otomesaj', dmsender: 'dmsender', giveawayfarmer: 'giveawayfarmer',
+  nitrosniper: 'nitrosniper', aichat: 'aichat', boostcheck: 'boostcheck', template: 'template',
+  mobil: 'mobil', surem: 'surem', otobump: 'otobump', mcafk: 'mcafk', spotify: 'spotify',
+  rolver: 'rolver', rolal: 'rolal', rol: 'rol', code: 'code', sespaneli: 'sespaneli',
+  resimtopla: 'resimtopla', // 🚨 Resim toplama paneli eklendi
   vaultsettings: 'vaultsettings',
 };
 
@@ -152,7 +133,6 @@ client.once('ready', () => {
     console.error('⏱️ [Playtime] Boot hatası:', err.message);
   }
 
-  // Reboot Recovery
   recoverAllOwoWorkers().catch(console.error);
   recoverOnlineSessions().catch(console.error);
   recoverAutoTypers().catch(console.error);
@@ -169,9 +149,7 @@ client.once('ready', () => {
   recoverBotKeeper().catch(console.error);
   recoverBumpJobs().catch(console.error);
 
-  // 30 saniye bekle, tüm sistemler otursun, sonra süreyi kaydet
   setTimeout(registerExistingSessions, 30 * 1000);
-
   setTimeout(() => {
     processPendingAwards().catch(err => console.error('[Playtime] Bekleyen rol dağıtımı hatası:', err.message));
   }, 45 * 1000);
@@ -179,11 +157,77 @@ client.once('ready', () => {
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
 const PREFIX = '!';
-const CODE_REDEEM_CHANNEL_ID = '1571141536136302632'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
+const CODE_REDEEM_CHANNEL_ID = 'BURAYA_KOD_KANALI_ID'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  
+
+// ── DM ÜZERİNDEN MEDYA TOPLAMA SİSTEMİ (ORTAK HAVUZ) ──
+if (message.channel.type === ChannelType.DM) {
+  const dmCollector = await import('./utils/dmCollector.js');
+  const ownerId = dmCollector.activeOwnerId;
+
+  // Eğer aktif bir oturum varsa (Sahip, Başlat butonuna bastıysa)
+  if (ownerId) {
+    let downloadedCount = 0;
+    
+    // 1. DOSYA EKLERİNİ (RESİM/DOSYA) KONTROL ET
+    if (message.attachments.size > 0) {
+      for (const att of message.attachments.values()) {
+        try {
+          await dmCollector.downloadAttachment(ownerId, att);
+          console.log(`[DM Collector] İndirildi (Ek): ${att.name} | Gönderen: ${message.author.tag}`);
+          downloadedCount++;
+        } catch (err) {
+          console.error('[DM Collector] İndirme hatası (Ek):', err);
+        }
+      }
+    }
+
+    // 2. GÖMÜLÜ (EMBED) RESİMLERİ KONTROL ET (İletilen mesajlar veya linkler için)
+    if (message.embeds.length > 0) {
+      for (const embed of message.embeds) {
+        const imageUrl = embed.image?.url || embed.thumbnail?.url;
+        if (imageUrl) {
+          try {
+            const fakeAttachment = { url: imageUrl, name: `embed_${Date.now()}.jpg` };
+            await dmCollector.downloadAttachment(ownerId, fakeAttachment);
+            console.log(`[DM Collector] İndirildi (Embed): ${fakeAttachment.name} | Gönderen: ${message.author.tag}`);
+            downloadedCount++;
+          } catch (err) {
+            console.error('[DM Collector] İndirme hatası (Embed):', err);
+          }
+        }
+      }
+    }
+
+    // 3. İLETİLEN (REPLY/FORWARD) MESAJLARI KONTROL ET
+    if (message.reference && message.reference.messageId) {
+      try {
+        const repliedMsg = await message.channel.messages.fetch(message.reference.messageId);
+        if (repliedMsg.attachments.size > 0) {
+          for (const att of repliedMsg.attachments.values()) {
+            await dmCollector.downloadAttachment(ownerId, att);
+            console.log(`[DM Collector] İndirildi (İletilen): ${att.name} | Gönderen: ${message.author.tag}`);
+            downloadedCount++;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (downloadedCount > 0) {
+      const total = dmCollector.getUserImageCount(ownerId);
+      await message.reply(`✅ **${downloadedCount}** dosya havuza eklendi! (Toplam: **${total}**)`);
+    } else if (message.content.trim().length > 0) {
+      await message.reply('⚠️ Dosya algılanamadı! Lütfen resmi **dosya olarak (+ butonu ile)** gönderin. Link atarsanız bot göremez.');
+    }
+  } else {
+    // Oturum yoksa sadece bilgi ver, kimseye kaydetme
+    // await message.reply('⚠️ Şu an kimse resim toplamıyor.');
+  }
+  return;
+}
+
   // ── KOD KULLANMA (Sadece Belirlenen Kanalda ve RX- ile başlıyorsa) ──
   if (message.channel.id === CODE_REDEEM_CHANNEL_ID && message.content.startsWith('RX-')) {
     const codeCommand = client.commands.get('code');
@@ -276,7 +320,6 @@ function startPlaytimeEngine() {
     try { heartbeat(); } catch (err) { console.error('[Playtime] heartbeat hatası:', err.message); }
   }, 30 * 1000);
 
-  // Her 60 saniyede bir kontrol et. Hata çıksa bile DÖNGÜ DEVAM ETSİN.
   setInterval(() => {
     try {
       // BUG FIX: sadece liveKeys'teki değil, playtime.json'daki TÜM kullanıcılar
@@ -286,10 +329,7 @@ function startPlaytimeEngine() {
       for (const userId of users) {
         try {
           syncUser(userId);
-        } catch (userErr) {
-          // Hata izolasyonu: Tek kullanıcı patlarsa diğerlerini etkilemesin
-          // console.warn(`[Playtime] ${userId} senkron edilemedi:`, userErr.message); 
-        }
+        } catch (userErr) {}
       }
     } catch (err) {
       console.error('[Playtime] genel senkron hatası:', err.message);
@@ -297,16 +337,14 @@ function startPlaytimeEngine() {
   }, 60 * 1000);
 }
 
-/** Reboot recovery bittikten sonra gerçekten çalışan modülleri kayıt altına al */
 function registerExistingSessions() {
   try {
     const users = getPlaytimeUsers();
     let active = 0;
     for (const userId of users) {
       try {
-        // syncUser async — tamamını beklemeden de çalışır ama burada net sayı için await ederiz
+        // syncUser async — fire-and-forget, hata izole edilir
         Promise.resolve(syncUser(userId)).then(res => {
-          // BUG FIX: Eğer res veya res.active undefined gelirse çökmesini engelliyoruz
           if (res && Array.isArray(res.active)) {
             active += res.active.length;
           }

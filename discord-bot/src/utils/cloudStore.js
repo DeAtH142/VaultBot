@@ -29,6 +29,7 @@ export const SYNC_FILES = [
   'event_listeners.json',
   'ai_keys.json',
   'playtime.json', // ⏱️ rol ilerlemesi — bot kapansa da kaybolmamalı
+  'codes.json',    // 🎁 kod sistemi — bot kapansa da kodlar silinmemeli!
 ];
 
 let firestoreDb = null;

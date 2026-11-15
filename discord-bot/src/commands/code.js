@@ -14,16 +14,32 @@ import { parseDuration } from '../utils/timeParser.js';
 import { COLORS, BRAND, E, THIN_DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
 import { PACKAGES } from '../../config/rexal.config.js';
 
-const AUTHORIZED_ADMINS = ['1160564359727173792']; // KENDİ ID'ni yaz!
+const AUTHORIZED_ADMINS = ['1160564359727173792']; // Kendi ID'n
 const codesFilePath = path.join(process.cwd(), 'data', 'codes.json');
 
-// JSON Veritabanı İşlemleri
+// ── JSON Veritabanı İşlemleri (Hata Korumalı) ──
 function loadCodes() {
-  if (!fs.existsSync(codesFilePath)) return {};
-  return JSON.parse(fs.readFileSync(codesFilePath, 'utf8'));
+  try {
+    if (!fs.existsSync(codesFilePath)) return {};
+    const data = fs.readFileSync(codesFilePath, 'utf8');
+    return JSON.parse(data || '{}');
+  } catch (err) {
+    console.error('Kodlar yüklenirken hata:', err);
+    return {};
+  }
 }
+
 function saveCodes(codes) {
-  fs.writeFileSync(codesFilePath, JSON.stringify(codes, null, 2));
+  try {
+    const dir = path.dirname(codesFilePath);
+    // Eğer data klasörü yoksa oluştur (GitHub Actions için kritik!)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(codesFilePath, JSON.stringify(codes, null, 2));
+  } catch (err) {
+    console.error('Kodlar kaydedilirken hata:', err);
+  }
 }
 
 // RX-1M-9A4F-7C2E-8B1D Formatında Kod Üret
@@ -45,11 +61,13 @@ export default {
 
       const codeData = codes[code];
       
+      // Süre kontrolü
       if (codeData.expiresAt !== 'infinite' && new Date() > new Date(codeData.expiresAt)) {
         delete codes[code]; saveCodes(codes);
         return message.reply({ embeds: [errorEmbed('❌ Bu kodun süresi dolmuş!')] });
       }
 
+      // Limit kontrolü
       if (codeData.limit <= 0) {
         return message.reply({ embeds: [errorEmbed('❌ Bu kodun kullanım limiti dolmuş! (İlk yazanlar aldı)')] });
       }
@@ -60,10 +78,14 @@ export default {
       if (!role) return message.reply({ embeds: [errorEmbed('❌ Rol bulunamadı, yöneticiye bildirin.')] });
       if (member.roles.cache.has(role.id)) return message.reply({ embeds: [errorEmbed('⚠️ Bu role zaten sahipsin!')] });
 
-      // Rolü ver, limiti düşür
-      await member.roles.add(role.id);
-      codeData.limit -= 1;
-      saveCodes(codes);
+      try {
+        // Rolü ver
+        await member.roles.add(role.id);
+        
+        // Limiti düşür ve kaydet
+        codeData.limit -= 1;
+        codes[code] = codeData;
+        saveCodes(codes);
 
       setUserSubscription(message.author.id, {
         type: role.name, 
@@ -73,11 +95,15 @@ export default {
         guildId: message.guild.id
       });
 
-      const embed = new EmbedBuilder()
-        .setColor(COLORS.success)
-        .setTitle('🎁 Kod Başarıyla Kullanıldı!')
-        .setDescription(`Tebrikler! **${role.name}** rolünü kazandın.\n> Kalan Hak: \`${codeData.limit}\``);
-      await message.reply({ embeds: [embed] });
+        const embed = new EmbedBuilder()
+          .setColor(COLORS.success)
+          .setTitle('🎁 Kod Başarıyla Kullanıldı!')
+          .setDescription(`Tebrikler ${message.author}! **${role.name}** rolünü kazandın.\n> Kalan Hak: \`${codeData.limit}\``);
+        await message.reply({ embeds: [embed] });
+      } catch (err) {
+        console.error('Rol verme hatası:', err);
+        await message.reply('❌ Rol verilirken bir hata oluştu. Botun yetkilerini kontrol edin.');
+      }
       return;
     }
 
