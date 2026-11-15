@@ -1,5 +1,5 @@
 // src/index.js
-import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
+import { Client, Collection, GatewayIntentBits, Partials, ChannelType } from 'discord.js';
 import dotenv from 'dotenv';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -61,8 +61,9 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildPresences,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages, // DM mesajlarını okuyabilmek için eklendi
   ],
-  partials: [Partials.Message, Partials.Channel],
+  partials: [Partials.Message, Partials.Channel, Partials.DirectMessage], // DM'ler için DirectMessage eklendi
 });
 
 client.commands = new Collection();
@@ -96,7 +97,6 @@ const CUSTOM_ID_ROUTES = {
   voiceafk: 'voiceafk',
   otoreact: 'otoreact',
   autoleave: 'autoleave',
-  sespaneli: 'sespaneli',
   joiner: 'joiner',
   profilechanger: 'profilechanger',
   friendcleaner: 'friendcleaner',
@@ -116,7 +116,8 @@ const CUSTOM_ID_ROUTES = {
   rolver: 'rolver',
   rolal: 'rolal',
   rol: 'rol',
-  code: 'code', // 🎁 Kod Panel sistemi eklendi
+  code: 'code', 
+  sespaneli: 'sespaneli', // 🎵 Ses paneli eklendi
   vaultsettings: 'vaultsettings',
 };
 
@@ -169,7 +170,6 @@ client.once('ready', () => {
   recoverBotKeeper().catch(console.error);
   recoverBumpJobs().catch(console.error);
 
-  // 30 saniye bekle, tüm sistemler otursun, sonra süreyi kaydet
   setTimeout(registerExistingSessions, 30 * 1000);
 
   setTimeout(() => {
@@ -179,11 +179,38 @@ client.once('ready', () => {
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
 const PREFIX = '!';
-const CODE_REDEEM_CHANNEL_ID = '1571141536136302632'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
+const CODE_REDEEM_CHANNEL_ID = 'BURAYA_KOD_KANALI_ID'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
-  
+
+  // ── DM ÜZERİNDEN RESİM TOPLAMA SİSTEMİ ──
+  if (message.channel.type === ChannelType.DM) {
+    const resimToplaCommand = client.commands.get('resimtopla');
+    if (resimToplaCommand && resimToplaCommand.isActive(message.author.id)) {
+      const imageAttachments = message.attachments.filter(att => 
+        att.contentType?.startsWith('image/')
+      );
+
+      if (imageAttachments.size > 0) {
+        const { downloadAttachment, getUserImageCount } = await import('./utils/dmCollector.js');
+        for (const att of imageAttachments.values()) {
+          try {
+            await downloadAttachment(message.author.id, att);
+            console.log(`[DM Collector] ${message.author.id} için resim indirildi: ${att.name}`);
+          } catch (err) {
+            console.error('[DM Collector] Resim indirme hatası:', err);
+          }
+        }
+        const totalCount = getUserImageCount(message.author.id);
+        await message.reply(`✅ **${imageAttachments.size}** resim alındı! Toplam: **${totalCount}** resim.`);
+      } else if (message.content.trim().length > 0) {
+        await message.reply('⚠️ Sadece resim dosyaları toplanıyor. Lütfen bir resim gönder.');
+      }
+    }
+    return; // DM'lerde başka komut çalıştırma
+  }
+
   // ── KOD KULLANMA (Sadece Belirlenen Kanalda ve RX- ile başlıyorsa) ──
   if (message.channel.id === CODE_REDEEM_CHANNEL_ID && message.content.startsWith('RX-')) {
     const codeCommand = client.commands.get('code');
@@ -276,7 +303,6 @@ function startPlaytimeEngine() {
     try { heartbeat(); } catch (err) { console.error('[Playtime] heartbeat hatası:', err.message); }
   }, 30 * 1000);
 
-  // Her 60 saniyede bir kontrol et. Hata çıksa bile DÖNGÜ DEVAM ETSİN.
   setInterval(() => {
     try {
       const users = new Set(listTrackedUsers());
@@ -284,8 +310,7 @@ function startPlaytimeEngine() {
         try {
           syncUser(userId);
         } catch (userErr) {
-          // Hata izolasyonu: Tek kullanıcı patlarsa diğerlerini etkilemesin
-          // console.warn(`[Playtime] ${userId} senkron edilemedi:`, userErr.message); 
+          // Hata izolasyonu
         }
       }
     } catch (err) {
@@ -294,7 +319,6 @@ function startPlaytimeEngine() {
   }, 60 * 1000);
 }
 
-/** Reboot recovery bittikten sonra gerçekten çalışan modülleri kayıt altına al */
 function registerExistingSessions() {
   try {
     const users = getPlaytimeUsers();
@@ -302,7 +326,6 @@ function registerExistingSessions() {
     for (const userId of users) {
       try {
         const res = syncUser(userId);
-        // BUG FIX: Eğer res veya res.active undefined gelirse çökmesini engelliyoruz
         if (res && Array.isArray(res.active)) {
           active += res.active.length;
         }
