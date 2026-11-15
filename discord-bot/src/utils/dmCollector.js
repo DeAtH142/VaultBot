@@ -5,17 +5,27 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
 
-// Kullanıcı bazlı geçici resim depolama
+// Aktif oturum sahibi (Senin ID'n)
+export let activeOwnerId = null;
+
+// Dosyalar (ownerId -> [dosya yolları])
 const userImages = new Map();
 
-// Kullanıcı bazlı aktif toplama oturumları (userId -> boolean)
-export const activeSessions = new Set();
-
-export async function downloadAttachment(userId, attachment) {
-  const dir = path.join(process.cwd(), 'data', 'dm_images', userId);
+export async function downloadAttachment(ownerId, attachment) {
+  const dir = path.join(process.cwd(), 'data', 'dm_images', ownerId);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  const safeName = `${Date.now()}_${attachment.name.replace(/[^a-z0-9.]/gi, '_')}`;
+  // Dosya uzantısını koru (jpg, png vs)
+  let ext = '.jpg';
+  if (attachment.name) {
+    const parts = attachment.name.split('.');
+    if (parts.length > 1) ext = '.' + parts.pop();
+  } else if (attachment.url) {
+    const urlParts = attachment.url.split('?')[0].split('.');
+    if (urlParts.length > 1) ext = '.' + urlParts.pop();
+  }
+
+  const safeName = `${Date.now()}_${Math.floor(Math.random() * 1000)}${ext}`;
   const filePath = path.join(dir, safeName);
 
   const response = await fetch(attachment.url);
@@ -24,14 +34,14 @@ export async function downloadAttachment(userId, attachment) {
   const buffer = Buffer.from(await response.arrayBuffer());
   fs.writeFileSync(filePath, buffer);
 
-  if (!userImages.has(userId)) userImages.set(userId, []);
-  userImages.get(userId).push(filePath);
+  if (!userImages.has(ownerId)) userImages.set(ownerId, []);
+  userImages.get(ownerId).push(filePath);
 
   return filePath;
 }
 
-export async function createZipFromUserImages(userId) {
-  const files = userImages.get(userId) || [];
+export async function createZipFromUserImages(ownerId) {
+  const files = userImages.get(ownerId) || [];
   if (files.length === 0) return null;
 
   return new Promise((resolve, reject) => {
@@ -52,17 +62,26 @@ export async function createZipFromUserImages(userId) {
   });
 }
 
-export function clearUserImages(userId) {
-  const files = userImages.get(userId) || [];
+export function clearUserImages(ownerId) {
+  const files = userImages.get(ownerId) || [];
   for (const filePath of files) {
     try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
   }
-  userImages.delete(userId);
+  userImages.delete(ownerId);
 
-  const dir = path.join(process.cwd(), 'data', 'dm_images', userId);
+  const dir = path.join(process.cwd(), 'data', 'dm_images', ownerId);
   try { if (fs.existsSync(dir)) fs.rmdirSync(dir, { recursive: true }); } catch (e) {}
 }
 
-export function getUserImageCount(userId) {
-  return (userImages.get(userId) || []).length;
+export function getUserImageCount(ownerId) {
+  return (userImages.get(ownerId) || []).length;
+}
+
+export function startSession(ownerId) {
+  activeOwnerId = ownerId;
+  clearUserImages(ownerId);
+}
+
+export function stopSession() {
+  activeOwnerId = null;
 }
