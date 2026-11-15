@@ -11,7 +11,8 @@ import fs from 'fs';
 import path from 'path';
 import { setUserSubscription } from '../utils/tokenStore.js';
 import { parseDuration } from '../utils/timeParser.js';
-import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
+import { COLORS, BRAND, E, THIN_DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
+import { PACKAGES } from '../../config/rexal.config.js';
 
 const AUTHORIZED_ADMINS = ['1160564359727173792']; // KENDİ ID'ni yaz!
 const codesFilePath = path.join(process.cwd(), 'data', 'codes.json');
@@ -40,24 +41,24 @@ export default {
     const code = args[0] ? args[0].toUpperCase() : null;
     if (code && code.startsWith('RX-')) {
       const codes = loadCodes();
-      if (!codes[code]) return message.reply('❌ Geçersiz veya kullanılmış bir kod!');
+      if (!codes[code]) return message.reply({ embeds: [errorEmbed('❌ Geçersiz veya kullanılmış bir kod!')] });
 
       const codeData = codes[code];
       
       if (codeData.expiresAt !== 'infinite' && new Date() > new Date(codeData.expiresAt)) {
         delete codes[code]; saveCodes(codes);
-        return message.reply('❌ Bu kodun süresi dolmuş!');
+        return message.reply({ embeds: [errorEmbed('❌ Bu kodun süresi dolmuş!')] });
       }
 
       if (codeData.limit <= 0) {
-        return message.reply('❌ Bu kodun kullanım limiti dolmuş! (İlk yazanlar aldı)');
+        return message.reply({ embeds: [errorEmbed('❌ Bu kodun kullanım limiti dolmuş! (İlk yazanlar aldı)')] });
       }
 
       const member = await message.guild.members.fetch(message.author.id);
       const role = message.guild.roles.cache.get(codeData.roleId);
       
-      if (!role) return message.reply('❌ Rol bulunamadı, yöneticiye bildirin.');
-      if (member.roles.cache.has(role.id)) return message.reply('⚠️ Bu role zaten sahipsin!');
+      if (!role) return message.reply({ embeds: [errorEmbed('❌ Rol bulunamadı, yöneticiye bildirin.')] });
+      if (member.roles.cache.has(role.id)) return message.reply({ embeds: [errorEmbed('⚠️ Bu role zaten sahipsin!')] });
 
       // Rolü ver, limiti düşür
       await member.roles.add(role.id);
@@ -67,7 +68,7 @@ export default {
       setUserSubscription(message.author.id, {
         type: role.name, 
         expiresAt: codeData.expiresAt, 
-        capacity: 4, 
+        capacity: (PACKAGES.find(p => p.roleId === role.id)?.capacity) || 4, 
         roleId: role.id, 
         guildId: message.guild.id
       });
@@ -82,7 +83,7 @@ export default {
 
     // ── KOD OLUŞTURMA PANELİ (Adminler) ──
     if (!AUTHORIZED_ADMINS.includes(message.author.id)) {
-      return message.reply({ content: '❌ Bu komutu kullanma yetkiniz yok kral!', ephemeral: true });
+      return message.reply({ embeds: [errorEmbed('❌ Bu komutu kullanma yetkiniz yok kral!')], ephemeral: true });
     }
 
     const embed = new EmbedBuilder()
@@ -106,10 +107,12 @@ export default {
         .setCustomId('code:selectrole')
         .setPlaceholder('🎭 Kod dağıtılacak rolü seçin...')
         .addOptions(
-          message.guild.roles.cache
-            .filter(r => r.id !== message.guild.id && !r.managed)
-            .map(r => ({ label: r.name, value: r.id, emoji: '🎁' }))
-            .slice(0, 25)
+          PACKAGES
+            .map(p => {
+              const r = message.guild.roles.cache.get(p.roleId);
+              return r ? ({ label: r.name, value: r.id, emoji: '🎁', description: `Kapasite: ${p.capacity}` }) : null;
+            })
+            .filter(Boolean)
         )
     );
 

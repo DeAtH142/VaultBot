@@ -1,4 +1,5 @@
 // src/commands/owo.js — v3.1 (Para & W Transferi Eklendi)
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -74,6 +75,9 @@ export default {
   description: 'REXAL ✦ OwO Premium Otomasyon Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!owo');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = createMainOwoEmbed();
     const rows = createMainControlRows();
     await message.reply({ embeds: [embed], components: rows });

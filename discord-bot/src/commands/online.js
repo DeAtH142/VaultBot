@@ -1,4 +1,5 @@
 // src/commands/online.js
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   ActionRowBuilder,
   StringSelectMenuBuilder,
@@ -11,7 +12,7 @@ import {
 } from 'discord.js';
 import { getTokens, updateTokenStatus } from '../utils/tokenStore.js';
 import { setAccountPresence, stopAccountSession, isAccountSessionActive } from '../utils/accountManager.js';
-import { createOnlineSystemEmbed, createOnlineSystemComponents, COLORS } from '../utils/embeds.js';
+import { createOnlineSystemEmbed, createOnlineSystemComponents, COLORS , errorEmbed, infoEmbed } from '../utils/embeds.js';
 import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 export default {
@@ -20,6 +21,9 @@ export default {
   description: 'REXAL Online Tutma Sistemi Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!online');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = createOnlineSystemEmbed();
     const components = createOnlineSystemComponents();
     await message.reply({ embeds: [embed], components });

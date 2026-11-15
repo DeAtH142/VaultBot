@@ -1,6 +1,6 @@
 // src/commands/yardim.js
 import { EmbedBuilder } from 'discord.js';
-import { E, DIVIDER } from '../utils/embeds.js';
+import { E, DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
 
 // ── Kategori bazlı eksiksiz komut rehberi ─────────────────────────────────
 const SECTIONS = [

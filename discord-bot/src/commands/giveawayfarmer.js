@@ -1,4 +1,5 @@
 // src/commands/giveawayfarmer.js — 🎁 Giveaway Farmer Modülü
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // Kasadaki hesaplar, bulundukları sunuculardaki 🎉 reaksiyonlu giveaway mesajlarına otomatik katılır.
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { COLORS, THIN_DIVIDER, errorEmbed, BRAND, UX, section, bullet, statusLine } from '../utils/embeds.js';
@@ -15,6 +16,9 @@ export default {
   description: 'REXAL — Otomatik Giveaway Katılımcısı',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!giveawayfarmer');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(COLORS.gold)
       .setAuthor({ name: `${BRAND.name} • Giveaway Hunter Engine ${BRAND.version}` })

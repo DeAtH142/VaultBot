@@ -1,4 +1,5 @@
 // src/commands/voiceafk.js — 🌙 Özel AFK & Ses Sistemi (Per-User + DM Ses v4)
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -65,6 +66,9 @@ export default {
   description: 'REXAL — Özel AFK & Ses Sistemi Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!voiceafk');
+    if (_deny) return message.reply({ embeds: [_deny] });
     await message.reply({
       embeds: [createMainEmbed(message.client)],
       components: createMainRows(),

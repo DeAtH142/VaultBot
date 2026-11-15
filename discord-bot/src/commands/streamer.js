@@ -1,4 +1,5 @@
 ﻿// src/commands/streamer.js — 📺 REXAL Streamer Rich Presence Paneli
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // Fotoğraftaki panelin bot entegrasyonu:
 //  - Kasadan hesap seç → 7/24 "canlı yayında" görünür (STREAMING + mor rozet)
 //  - Özel yayın başlığı, oyun/kategori, opsiyonel logo görseli
@@ -69,6 +70,9 @@ export default {
   description: 'REXAL 📺 REXAL Streamer Rich Presence Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!streamer');
+    if (_deny) return message.reply({ embeds: [_deny] });
     await message.reply({ embeds: [buildPanel(message.author.id)], components: BUTTONS() });
   },
 

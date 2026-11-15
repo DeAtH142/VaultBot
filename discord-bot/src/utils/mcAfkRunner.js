@@ -51,6 +51,13 @@ export function getMcStats(userId, accountIndex) {
 
 const runningBots = new Map(); // `${userId}:${accountIndex}` -> state
 const SWING_INTERVAL_MS = 45_000;   // Anti-AFK: her 45 sn kol sallar
+
+/** ⏱️ Süre motoru probe: bu MC AFK oturumu çalışıyor mu? */
+export function isMcAfkRunning(userId, accountIndex) {
+  const s = runningBots.get(`${userId}:${accountIndex}`);
+  return !!(s && s.running);
+}
+
 const RECONNECT_DELAY_MS = 8_000;   // Kopunca bekleme
 const MAX_RECONNECTS = 999;         // Sürekli yeniden bağlan
 

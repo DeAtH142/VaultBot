@@ -3,7 +3,7 @@
 // !kur [panel] — owo | online | autotyper | voiceafk | otoreact | autoleave | joiner | profilechanger | friendcleaner | hepsi
 import { PermissionFlagsBits } from 'discord.js';
 import { createMainOwoEmbed, createMainControlRows } from './owo.js';
-import { createOnlineSystemEmbed, createOnlineSystemComponents } from '../utils/embeds.js';
+import { createOnlineSystemEmbed, createOnlineSystemComponents , errorEmbed, infoEmbed } from '../utils/embeds.js';
 
 // Lazy-load panel üreticileri — her yeni modülün panelini tek yerden kurar.
 const LAZY_PANELS = {
@@ -38,7 +38,7 @@ export default {
   async execute(message, args) {
     const isAdmin = message.member?.permissions?.has(PermissionFlagsBits.Administrator) ?? false;
     if (!isAdmin && message.author.id !== '1160564359727173792') {
-      return message.reply('⛔ Bu komutu sadece **Yöneticiler** kullanabilir.');
+      return message.reply({ embeds: [errorEmbed('⛔ Bu komutu sadece **Yöneticiler** kullanabilir.')] });
     }
 
     const type = args[0]?.toLowerCase() || 'hepsi';

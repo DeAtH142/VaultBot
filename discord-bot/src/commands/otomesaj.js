@@ -1,4 +1,5 @@
 // src/commands/otomesaj.js — 🕐 Oto Mesaj/Post Modülü
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // Belirlenen kanala, dakika bazlı interval ile reklam/davet mesajı atar (rastgele havuzdan).
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder } from 'discord.js';
 import { COLORS, THIN_DIVIDER, errorEmbed, BRAND, UX, section, bullet, statusLine } from '../utils/embeds.js';
@@ -28,6 +29,9 @@ export default {
   description: 'REXAL — Zamanlanmış Kanal Mesaj Motoru Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!otomesaj');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(COLORS.gold)
       .setAuthor({ name: `${BRAND.name} • Scheduled Post Engine ${BRAND.version}` })

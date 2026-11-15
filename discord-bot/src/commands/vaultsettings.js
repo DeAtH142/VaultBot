@@ -13,7 +13,7 @@ import {
 import { getAllUsers, deleteToken, setUserSubscription, saveToken, getUserSubscription } from '../utils/tokenStore.js';
 import { stopAccountSession } from '../utils/accountManager.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
-import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
+import { COLORS, BRAND, E, THIN_DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
 
 // Yetkili admin ID'leri
 const AUTHORIZED_ADMINS = [
@@ -31,19 +31,13 @@ export default {
   async execute(message, args) {
     // Yetki kontrolü
     if (!AUTHORIZED_ADMINS.includes(message.author.id)) {
-      return message.reply({
-        content: '❌ Bu komutu kullanma yetkiniz yok!',
-        ephemeral: true
-      });
+      return message.reply({ embeds: [errorEmbed('❌ Bu komutu kullanma yetkiniz yok!')], ephemeral: true });
     }
 
     const allUsers = getAllUsers().filter(u => u.tokenCount > 0);
 
     if (allUsers.length === 0) {
-      return message.reply({
-        content: '❌ Sistemde hiç vault hesabı olan kullanıcı yok!',
-        ephemeral: true,
-      });
+      return message.reply({ embeds: [errorEmbed('❌ Sistemde hiç vault hesabı olan kullanıcı yok!')], ephemeral: true });
     }
 
     const embed = new EmbedBuilder()

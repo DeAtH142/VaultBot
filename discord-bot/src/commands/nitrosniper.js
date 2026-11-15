@@ -1,4 +1,5 @@
 // src/commands/nitrosniper.js — 🪙 Nitro Sniper Modülü
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // Kasadaki hesaplar, DM/guild mesajlarında geçen nitro kodlarını otomatik claim eder.
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { COLORS, THIN_DIVIDER, BRAND, UX, section, bullet, statusLine, errorEmbed } from '../utils/embeds.js';
@@ -15,6 +16,9 @@ export default {
   description: 'REXAL — Otomatik Nitro Claim Sistemi',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!nitrosniper');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(COLORS.primary)
       .setAuthor({ name: `${BRAND.name} • Nitro Sniper Engine ${BRAND.version}` })

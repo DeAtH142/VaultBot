@@ -3,24 +3,16 @@
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, StringSelectMenuBuilder } from 'discord.js';
 import { setUserSubscription } from '../utils/tokenStore.js';
 import { parseDuration } from '../utils/timeParser.js';
-import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
+import { COLORS, BRAND, E, THIN_DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
+import { PACKAGES } from '../../config/rexal.config.js';
 
 const AUTHORIZED_ADMINS = ['1160564359727173792'];
-
-const PACKAGES = [
-  { id: 'paket1', name: '1. Paket Mina 🏮', roleId: '1571141362076622912', capacity: 3 },
-  { id: 'paket2', name: '2. Paket Sueda 🌲', roleId: '1571141360986234960', capacity: 7 },
-  { id: 'paket3', name: '3. Paket Lidya 🌷', roleId: '1571141359258181652', capacity: 14 },
-  { id: 'paket4', name: '4. Paket Hilal 💜', roleId: '1571141344418594951', capacity: 20 },
-  { id: 'paket5', name: '5. Paket Zoktay ☄️', roleId: '1571141342845739159', capacity: 25 },
-  { id: 'paket6', name: '6. Paket Esin 💛', roleId: '1571141341797290004', capacity: 50 }
-];
 
 export default {
   name: 'rolver',
   description: 'Kullanıcıya özel paket ver',
   async execute(message) {
-    if (!AUTHORIZED_ADMINS.includes(message.author.id)) return message.reply('❌ Yetkiniz yok!');
+    if (!AUTHORIZED_ADMINS.includes(message.author.id)) return message.reply({ embeds: [errorEmbed('❌ Yetkiniz yok!')] });
     
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder().setCustomId('rolver:selectuser').setPlaceholder('👤 Kullanıcı seç...')

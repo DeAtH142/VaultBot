@@ -279,7 +279,10 @@ function startPlaytimeEngine() {
   // Her 60 saniyede bir kontrol et. Hata çıksa bile DÖNGÜ DEVAM ETSİN.
   setInterval(() => {
     try {
-      const users = new Set(listTrackedUsers());
+      // BUG FIX: sadece liveKeys'teki değil, playtime.json'daki TÜM kullanıcılar
+      // taranır — böylece reboot recovery ile geri gelen modüller de
+      // (markStart çağrılmadan) süre motoruna yeniden kaydedilir.
+      const users = new Set([...listTrackedUsers(), ...getPlaytimeUsers()]);
       for (const userId of users) {
         try {
           syncUser(userId);
@@ -301,16 +304,20 @@ function registerExistingSessions() {
     let active = 0;
     for (const userId of users) {
       try {
-        const res = syncUser(userId);
-        // BUG FIX: Eğer res veya res.active undefined gelirse çökmesini engelliyoruz
-        if (res && Array.isArray(res.active)) {
-          active += res.active.length;
-        }
+        // syncUser async — tamamını beklemeden de çalışır ama burada net sayı için await ederiz
+        Promise.resolve(syncUser(userId)).then(res => {
+          // BUG FIX: Eğer res veya res.active undefined gelirse çökmesini engelliyoruz
+          if (res && Array.isArray(res.active)) {
+            active += res.active.length;
+          }
+        }).catch(() => {});
       } catch (userErr) {
         console.warn(`[Playtime] ${userId} başlangıç kaydı yapılamadı:`, userErr.message);
       }
     }
-    if (active > 0) console.log(`⏱️ [Playtime] ${active} canlı sistem süre motoruna kaydedildi.`);
+    setTimeout(() => {
+      if (active > 0) console.log(`⏱️ [Playtime] ${active} canlı sistem süre motoruna kaydedildi.`);
+    }, 15 * 1000);
   } catch (err) {
     console.error('[Playtime] recovery kayıt hatası:', err.message);
   }

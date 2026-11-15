@@ -1,4 +1,5 @@
 // src/commands/spotify.js — 🎧 Spotify Fake Presence Kontrol Paneli
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // Akış: Başlat → Hesap seç → Şarkı ara (iTunes API) → Sonuçlardan seç → Presence aktif.
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
@@ -9,7 +10,7 @@ import {
   isSpotifyRunning, getSpotifyStats, listRunningSpotify,
   startSpotifyPresence, stopSpotifyPresence, stopAllSpotify, searchTrack,
 } from '../utils/spotifyPresenceRunner.js';
-import { COLORS, THIN_DIVIDER, BRAND, UX, section, statusLine } from '../utils/embeds.js';
+import { COLORS, THIN_DIVIDER, BRAND, UX, section, statusLine , errorEmbed, infoEmbed } from '../utils/embeds.js';
 import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Spotify Fake Presence Engine');
@@ -34,6 +35,9 @@ export default {
   description: 'REXAL — Spotify Fake Presence Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!spotify');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const running = listRunningSpotify(message.author.id);
     const stats = running.map((s) => {
       const st = getSpotifyStats(message.author.id, s.tokenIndex);

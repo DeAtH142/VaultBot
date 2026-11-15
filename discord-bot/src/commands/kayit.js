@@ -10,7 +10,7 @@ import {
   startVoiceRecording, stopVoiceRecording, getVoiceRecStats,
   listVoiceRecordings, isFfmpegAvailable,
 } from '../utils/voiceRecRunner.js';
-import { COLORS, THIN_DIVIDER, BRAND, UX, section, statusLine } from '../utils/embeds.js';
+import { COLORS, THIN_DIVIDER, BRAND, UX, section, statusLine , errorEmbed, infoEmbed } from '../utils/embeds.js';
 
 const FOOTER = () => BRAND.footer('Voice Recorder Engine');
 const MAX_SELECT_OPTIONS = 25;

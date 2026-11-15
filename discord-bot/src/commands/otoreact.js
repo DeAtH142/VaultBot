@@ -1,5 +1,6 @@
 // src/commands/otoreact.js — 🥵 REXAL — Premium Oto React Modülü
 // Vault'taki seçili hesap(lar)la hedef mesaja toplu reaksiyon basar.
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -83,6 +84,9 @@ export default {
   description: 'REXAL — Premium Oto React Modülü Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!otoreact');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(0xe91e63)
       .setAuthor({ name: `${BRAND.name} • Reaction Storm Engine ${BRAND.version}` })

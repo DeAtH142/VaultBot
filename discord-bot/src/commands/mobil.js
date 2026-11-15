@@ -1,4 +1,5 @@
 
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // src/commands/mobil.js 📱 REXAL Mobil Status Modülü
 // Hesapları Android istemcisi olarak bağlar — profilde mobil tik (📱) görünür.
 // Panel: adım adım kılavuz + hızlı kurulum akışı + canlı durum raporu.
@@ -90,6 +91,9 @@ export default {
   description: 'REXAL 📱 Mobil Status Modülü Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!mobil');
+    if (_deny) return message.reply({ embeds: [_deny] });
     await message.reply({ embeds: [buildMainEmbed(message.author.id)], components: MAIN_BUTTONS() });
   },
 

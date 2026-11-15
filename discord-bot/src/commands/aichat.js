@@ -1,4 +1,5 @@
 // src/commands/aichat.js — 🤖 AI Chat Botu (Groq / Gemini / OpenAI) — Pro Panel v3
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder,
@@ -52,6 +53,9 @@ export default {
   description: 'REXAL — AI Sohbet Botu (Groq / Gemini / OpenAI)',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!aichat');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const userId = message.author.id;
     const providers = availableProviders(userId);
     const keys = getUserKeys(userId);

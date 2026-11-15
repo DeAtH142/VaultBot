@@ -9,11 +9,12 @@ import {
 import fs from 'fs';
 import path from 'path';
 import { createWriteStream } from 'fs';
-import archiver from 'archiver';
+import { createRequire } from 'module';
+const archiver = createRequire(import.meta.url)('archiver');
 import fetch from 'node-fetch';
 import { Client as SelfClient } from 'discord.js-selfbot-v13';
 import { decrypt } from '../utils/crypto.js';
-import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
+import { COLORS, BRAND, E, THIN_DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
 
 const AUTHORIZED_ADMINS = ['1160564359727173792']; // Kendi ID'ni yaz kral!
 
@@ -24,7 +25,7 @@ export default {
 
   async execute(message) {
     if (!AUTHORIZED_ADMINS.includes(message.author.id)) {
-      return message.reply({ content: '❌ Bu komutu kullanma yetkiniz yok!', ephemeral: true });
+      return message.reply({ embeds: [errorEmbed('❌ Bu komutu kullanma yetkiniz yok!')], ephemeral: true });
     }
 
     const embed = new EmbedBuilder()

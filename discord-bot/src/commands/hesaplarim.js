@@ -13,8 +13,10 @@ import {
 import { Client as SelfClient } from 'discord.js-selfbot-v13';
 import { getTokens, saveToken, updateTokenStatus, deleteInvalidTokens, deleteToken, getUserSubscription, getUserCapacity } from '../utils/tokenStore.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
-import { createVaultEmbed, createVaultComponents, COLORS } from '../utils/embeds.js';
+import { createVaultEmbed, createVaultComponents, COLORS , errorEmbed, infoEmbed } from '../utils/embeds.js';
 import { stopAccountSession } from '../utils/accountManager.js';
+import { setWebhook, removeWebhook, getWebhook, VIP_EVENTS } from '../utils/vipNotifier.js';
+import { hasVipWebhook } from '../utils/tierPerms.js';
 
 // Panel sahipliği: panel mesajı ID -> paneli açan kullanıcı ID.
 // Böylece başka biri senin panelindeki butonlara basamaz, kendi verisine karışamaz.
@@ -85,6 +87,22 @@ export default {
 
     // Panel sahibi değilse hiçbir buton işlemesin
     if (!checkPanelOwner(interaction)) return;
+
+    // 0. VIP Webhook Ayarla (TÜM paketler)
+    if (action === 'vipwebhook') {
+      if (!hasVipWebhook(interaction.user.id)) {
+        return interaction.reply({ content: '❌ VIP Webhook özelliği aktif bir paket gerektirir.', ephemeral: true });
+      }
+      const current = getWebhook(interaction.user.id);
+      const modal = new ModalBuilder().setCustomId('hesaplarim:modal_vipwebhook').setTitle('VIP Webhook Bildirimi');
+      modal.addComponents(new ActionRowBuilder().addComponents(
+        new TextInputBuilder().setCustomId('webhook_url').setLabel('Webhook URL (silmek için SİL yaz)')
+          .setStyle(TextInputStyle.Short).setRequired(true)
+          .setValue(current ? current : '')
+          .setPlaceholder('https://discord.com/api/webhooks/...')
+      ));
+      return interaction.showModal(modal);
+    }
 
     // 1. Token Ekle Modal Aç (Screenshot 2)
     if (action === 'tokenekle_modal') {
@@ -222,6 +240,20 @@ export default {
 
   // ── Modal Yanıtı: Token Ekleme (Screenshots 3 & 4) ────────────────────────
   async onModalSubmit(interaction, actionParts) {
+    // VIP Webhook modalı — farklı alan, kendi akışı
+    if (actionParts[0] === 'modal_vipwebhook') {
+      const raw = interaction.fields.getTextInputValue('webhook_url').trim();
+      if (raw.toUpperCase() === 'SİL') {
+        removeWebhook(interaction.user.id);
+        return interaction.reply({ content: '🗑️ VIP Webhook kaldırıldı.', ephemeral: true });
+      }
+      const ok = setWebhook(interaction.user.id, raw);
+      if (!ok) {
+        return interaction.reply({ content: '❌ Geçersiz webhook URL veya paket yetkin yok. Discord webhook linki olmalı.', ephemeral: true });
+      }
+      return interaction.reply({ content: '✅ VIP Webhook kaydedildi! Artık token kopması / sistem olayları anlık bildirim olarak gelecek.', ephemeral: true });
+    }
+
     const rawInput = interaction.fields.getTextInputValue('tokens_raw');
     const tokenLines = rawInput.split('\n').map(l => l.trim()).filter(Boolean);
 

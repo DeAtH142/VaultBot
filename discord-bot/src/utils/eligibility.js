@@ -20,6 +20,8 @@ import { isMobileStatusRunning } from './mobileStatusRunner.js';
 import { isVoiceRecordingRunning } from './voiceRecRunner.js';
 import { isSpotifyRunning } from './spotifyPresenceRunner.js';
 import { isBumpRunning } from './bumpRunner.js';
+import { isMcAfkRunning } from './mcAfkRunner.js';
+import { isStreaming } from './streamerPresenceRunner.js';
 
 /**
  * Uygun sistemler — anahtar, oturum anahtarı olarak da kullanılır ("online:0").
@@ -34,6 +36,8 @@ export const ELIGIBLE = {
   voicerec: { label: 'Ses Kayıt', emoji: '🎙️', probe: (u, i) => isVoiceRecordingRunning(u, i) },
   spotify: { label: 'Spotify Presence', emoji: '🎵', probe: (u, i) => isSpotifyRunning(u, i) },
   otobump: { label: 'Oto Bump', emoji: '🚀', probe: (u, i) => isBumpRunning(u, i) },
+  mcafk: { label: 'MC AFK (Aternos)', emoji: '⛏️', probe: (u, i) => isMcAfkRunning(u, i) },
+  streamer: { label: 'Streamer Yayın', emoji: '📺', probe: (u, i) => isStreaming(u, i) },
 };
 // NOT: aichat (AI Chat) ve otomesaj (Oto Mesaj) bilinçli olarak KAPALI.
 // Bunlar süreye sayılmaz — aşağıdaki NON_ELIGIBLE grubundadır.

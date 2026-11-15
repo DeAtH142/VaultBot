@@ -1,4 +1,5 @@
 // src/commands/dmsender.js — 💌 Toplu DM Sender Modülü
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, StringSelectMenuBuilder } from 'discord.js';
 import { COLORS, THIN_DIVIDER, errorEmbed, BRAND, UX, section, bullet, statusLine } from '../utils/embeds.js';
 import { getTokens } from '../utils/tokenStore.js';
@@ -14,6 +15,9 @@ export default {
   description: 'REXAL — Toplu DM Sender Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!dmsender');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(COLORS.purple)
       .setAuthor({ name: `${BRAND.name} • Bulk DM Engine ${BRAND.version}` })

@@ -20,7 +20,7 @@ import {
   E,
   UX,
   DIVIDER,
-} from '../utils/embeds.js';
+  errorEmbed, infoEmbed } from '../utils/embeds.js';
 
 
 
@@ -103,7 +103,7 @@ export default {
         });
       }
 
-      const wait = await message.reply({ content: '🎖️ Roller veriliyor...' });
+      const wait = await message.reply({ embeds: [errorEmbed('🎖️ Roller veriliyor...')] });
       const results = await processAwards(user.id, pending, (uid, tier, res) => {
         try { resolveAward(uid, tier, res); } catch { }
       });

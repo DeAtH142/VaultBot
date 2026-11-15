@@ -29,8 +29,8 @@ import {
   createBumpDetailEmbed,
   createBumpBotsEmbed,
   createBumpStartedEmbed,
-} from '../utils/embeds.js';
-import { COLORS, E, BRAND, UX, THIN_DIVIDER, DIVIDER, errorEmbed } from '../utils/embeds.js';
+  errorEmbed, infoEmbed } from '../utils/embeds.js';
+import { COLORS, E, BRAND, UX, THIN_DIVIDER, DIVIDER } from '../utils/embeds.js';
 import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Bump Engine');

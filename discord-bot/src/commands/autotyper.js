@@ -1,4 +1,5 @@
 // src/commands/autotyper.js ✨ REXAL AutoTyper Modülü
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
@@ -19,6 +20,9 @@ export default {
   description: 'REXAL AutoTyper Modülü Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!autotyper');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(COLORS.info)
       .setAuthor({ name: `${BRAND.name} ⬢ TypeFlow Engine ${BRAND.version}` })

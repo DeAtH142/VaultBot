@@ -291,17 +291,33 @@ export async function startOwoAutomation(userId, tokenIndex) {
         console.warn(`⚠️ [OwORunner] CAPTCHA ALGISI! (${client.user.tag})`);
         state.isSolvingCaptcha = true;
         if (config.captchaKey && config.captchaKey.trim()) {
-          const attachment = msg.attachments.first()?.url || msg.embeds[0]?.image?.url;
+          // OwO captcha görseli birden fazla yerde olabilir:
+          //  1. msg.attachments  (en yaygın)
+          //  2. msg.embeds[].image.url
+          //  3. msg.embeds[].description içindeki link
+          //  4. msg.content içindeki link (bazı varyantlarda)
+          const attachment =
+            msg.attachments.first()?.url ||
+            msg.embeds?.find(e => e?.image?.url)?.image?.url ||
+            msg.embeds?.find(e => e?.thumbnail?.url)?.thumbnail?.url ||
+            (msg.content.match(/https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)\S*/i)?.[0]) ||
+            (msg.embeds?.map(e => e?.description || '').join(' ').match(/https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp)\S*/i)?.[0]);
+
           if (attachment) {
+            console.log(`🤖 [OwORunner] Captcha görseli bulundu, 2Captcha'ya gönderiliyor...`);
             const solution = await solve2Captcha(config.captchaKey, attachment);
             if (solution) {
               await sleep(randomBetween(2500, 4500));
               await msg.channel.send(solution).catch(() => { });
               await sleep(5000);
+              console.log(`✅ [OwORunner] Captcha çözümü gönderildi, bot devam ediyor.`);
               state.isSolvingCaptcha = false;
               scheduleNextHuntCycle(workerKey, userId, tokenIndex);
               return;
             }
+            console.error(`❌ [OwORunner] 2Captcha çözüm üretemedi — bot durduruluyor.`);
+          } else {
+            console.warn(`⚠️ [OwORunner] Captcha algılandı ama görsel bulunamadı.`);
           }
         }
         stopOwoAutomation(userId, tokenIndex);

@@ -2,7 +2,8 @@
 import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 import { setUserSubscription } from '../utils/tokenStore.js';
 import { parseDuration } from '../utils/timeParser.js';
-import { COLORS, BRAND, E, THIN_DIVIDER } from '../utils/embeds.js';
+import { COLORS, BRAND, E, THIN_DIVIDER , errorEmbed, infoEmbed } from '../utils/embeds.js';
+import { PACKAGES } from '../../config/rexal.config.js';
 
 const AUTHORIZED_ADMINS = ['1160564359727173792'];
 
@@ -11,7 +12,7 @@ export default {
   description: 'Butonlu form ile rol ver (Admin)',
   
   async execute(message) {
-    if (!AUTHORIZED_ADMINS.includes(message.author.id)) return message.reply('❌ Yetkin yok!');
+    if (!AUTHORIZED_ADMINS.includes(message.author.id)) return message.reply({ embeds: [errorEmbed('❌ Yetkin yok!')] });
 
     const embed = new EmbedBuilder()
       .setColor(COLORS.primary)
@@ -23,10 +24,12 @@ export default {
         .setCustomId('rol:selectrole')
         .setPlaceholder('🎭 Bir Rol Seçin...')
         .addOptions(
-          message.guild.roles.cache
-            .filter(r => r.id !== message.guild.id && !r.managed)
-            .map(r => ({ label: r.name, value: r.id }))
-            .slice(0, 25)
+          PACKAGES
+            .map(p => {
+              const r = message.guild.roles.cache.get(p.roleId);
+              return r ? ({ label: r.name, value: r.id, emoji: '🎭', description: `Kapasite: ${p.capacity}` }) : null;
+            })
+            .filter(Boolean)
         )
     );
     await message.reply({ embeds: [embed], components: [row] });
@@ -81,7 +84,7 @@ export default {
       setUserSubscription(userId, {
         type: role.name,
         expiresAt,
-        capacity: 4,
+        capacity: (PACKAGES.find(p => p.roleId === roleId)?.capacity) || 4,
         roleId: role.id,
         guildId: interaction.guild.id,
       });

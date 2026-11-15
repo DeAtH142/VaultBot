@@ -252,6 +252,10 @@ export function createVaultComponents(tokenList) {
     new ButtonBuilder().setCustomId('vault:tumunudurdur').setLabel('Tümünü Durdur').setEmoji('⛔').setStyle(ButtonStyle.Danger),
   ));
 
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('vault:vipwebhook').setLabel('VIP Webhook Bildirimi').setEmoji('🚨').setStyle(ButtonStyle.Secondary),
+  ));
+
   return rows;
 }
 

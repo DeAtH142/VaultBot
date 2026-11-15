@@ -1,4 +1,5 @@
 // src/commands/joiner.js — 🛡️ REXAL — Token Joiner (Vault Sürümlü)
+import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 // KASADAN seçilen hesapları, verilen invite linkine OAuth2 akışıyla sokar.
 // Hiçbir yerde token girilmez — hesaplar !hesaplarim kasasından seçilir.
 import {
@@ -53,6 +54,9 @@ export default {
   description: 'REXAL — Token Joiner Kontrol Paneli',
 
   async execute(message) {
+    // 🔐 SELFBOT_USERS yetki kontrolü
+    const _deny = selfbotDenyEmbed(message.author.id, '!joiner');
+    if (_deny) return message.reply({ embeds: [_deny] });
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
       .setAuthor({ name: `${BRAND.name} • Secure Joiner ${BRAND.version}` })
