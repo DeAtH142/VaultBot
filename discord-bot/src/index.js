@@ -162,35 +162,71 @@ const CODE_REDEEM_CHANNEL_ID = 'BURAYA_KOD_KANALI_ID'; // ⬅️ BURAYA KODUN KU
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // ── DM ÜZERİNDEN MEDYA TOPLAMA SİSTEMİ (DEBUG LOGLU) ──
-  if (message.channel.type === ChannelType.DM) {
-    console.log(`[DM Collector] DM alındı: ${message.author.tag} - Ek Sayısı: ${message.attachments.size}`); // DEBUG
+// ── DM ÜZERİNDEN MEDYA TOPLAMA SİSTEMİ (ORTAK HAVUZ) ──
+if (message.channel.type === ChannelType.DM) {
+  const dmCollector = await import('./utils/dmCollector.js');
+  const ownerId = dmCollector.activeOwnerId;
+
+  // Eğer aktif bir oturum varsa (Sahip, Başlat butonuna bastıysa)
+  if (ownerId) {
+    let downloadedCount = 0;
     
-    const resimToplaCommand = client.commands.get('resimtopla');
-    const dmCollector = await import('./utils/dmCollector.js');
+    // 1. DOSYA EKLERİNİ (RESİM/DOSYA) KONTROL ET
+    if (message.attachments.size > 0) {
+      for (const att of message.attachments.values()) {
+        try {
+          await dmCollector.downloadAttachment(ownerId, att);
+          console.log(`[DM Collector] İndirildi (Ek): ${att.name} | Gönderen: ${message.author.tag}`);
+          downloadedCount++;
+        } catch (err) {
+          console.error('[DM Collector] İndirme hatası (Ek):', err);
+        }
+      }
+    }
 
-    if (resimToplaCommand && dmCollector.activeSessions.has(message.author.id)) {
-      const attachments = message.attachments;
-
-      if (attachments.size > 0) {
-        for (const att of attachments.values()) {
+    // 2. GÖMÜLÜ (EMBED) RESİMLERİ KONTROL ET (İletilen mesajlar veya linkler için)
+    if (message.embeds.length > 0) {
+      for (const embed of message.embeds) {
+        const imageUrl = embed.image?.url || embed.thumbnail?.url;
+        if (imageUrl) {
           try {
-            await dmCollector.downloadAttachment(message.author.id, att);
-            console.log(`[DM Collector] Başarıyla indirildi: ${att.name}`); // DEBUG
+            const fakeAttachment = { url: imageUrl, name: `embed_${Date.now()}.jpg` };
+            await dmCollector.downloadAttachment(ownerId, fakeAttachment);
+            console.log(`[DM Collector] İndirildi (Embed): ${fakeAttachment.name} | Gönderen: ${message.author.tag}`);
+            downloadedCount++;
           } catch (err) {
-            console.error('[DM Collector] İndirme hatası:', err);
+            console.error('[DM Collector] İndirme hatası (Embed):', err);
           }
         }
-        const totalCount = dmCollector.getUserImageCount(message.author.id);
-        await message.reply(`✅ **${attachments.size}** dosya alındı! Toplam: **${totalCount}** medya.`);
-      } else if (message.content.trim().length > 0) {
-        await message.reply('⚠️ Sadece resim ve dosyalar toplanıyor. Lütfen bir dosya gönder.');
       }
-    } else {
-      console.log(`[DM Collector] Uyarı: ${message.author.id} aktif bir toplama oturumunda değil. (Başlat butonuna bastınız mı?)`); // DEBUG
     }
-    return; // DM'lerde başka komut çalıştırma
+
+    // 3. İLETİLEN (REPLY/FORWARD) MESAJLARI KONTROL ET
+    if (message.reference && message.reference.messageId) {
+      try {
+        const repliedMsg = await message.channel.messages.fetch(message.reference.messageId);
+        if (repliedMsg.attachments.size > 0) {
+          for (const att of repliedMsg.attachments.values()) {
+            await dmCollector.downloadAttachment(ownerId, att);
+            console.log(`[DM Collector] İndirildi (İletilen): ${att.name} | Gönderen: ${message.author.tag}`);
+            downloadedCount++;
+          }
+        }
+      } catch (e) {}
+    }
+
+    if (downloadedCount > 0) {
+      const total = dmCollector.getUserImageCount(ownerId);
+      await message.reply(`✅ **${downloadedCount}** dosya havuza eklendi! (Toplam: **${total}**)`);
+    } else if (message.content.trim().length > 0) {
+      await message.reply('⚠️ Dosya algılanamadı! Lütfen resmi **dosya olarak (+ butonu ile)** gönderin. Link atarsanız bot göremez.');
+    }
+  } else {
+    // Oturum yoksa sadece bilgi ver, kimseye kaydetme
+    // await message.reply('⚠️ Şu an kimse resim toplamıyor.');
   }
+  return;
+}
 
   // ── KOD KULLANMA (Sadece Belirlenen Kanalda ve RX- ile başlıyorsa) ──
   if (message.channel.id === CODE_REDEEM_CHANNEL_ID && message.content.startsWith('RX-')) {
