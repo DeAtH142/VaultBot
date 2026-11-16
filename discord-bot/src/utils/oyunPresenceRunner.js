@@ -1,5 +1,5 @@
 // src/utils/oyunPresenceRunner.js — 🎮 REXAL Oyun Fake Presence Motoru
-// Bu motor, selfbot üzerinden istediğin oyunu, detayları ve durumu 7/24 oynuyor gibi gösterir.
+// Bu motor, selfbot üzerinden istediğin oyunu, otomatik arama ve kapak resmiyle 7/24 oynuyor gibi gösterir.
 import { loginVaultAccount, destroyClient, sleep } from './selfbotHelpers.js';
 import { readSessions, writeSessions } from './sessionStore.js';
 import { RichPresence } from 'discord.js-selfbot-v13';
@@ -75,6 +75,29 @@ function deleteOyunEntry(userId, tokenIndex) {
   }
 }
 
+// ── Oyun Arama (Steam API ile) ──
+export async function searchGame(query) {
+  try {
+    // Steam'in halka açık arama API'si
+    const res = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=turkish&cc=tr`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    
+    if (!data.items || data.items.length === 0) return [];
+
+    // Sonuçları formatla (Kapak resmi, oyun adı, ID)
+    return data.items.map(item => ({
+      id: item.id,
+      name: item.name,
+      // Steam'in büyük kapak resmi URL'si
+      coverUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`
+    }));
+  } catch (err) {
+    console.error('🎮 [OyunPresence] Arama hatası:', err);
+    return [];
+  }
+}
+
 // ── Presence Payload Üretici ──
 async function buildPresenceState(state) {
   const { gameData } = state;
@@ -93,10 +116,9 @@ async function buildPresenceState(state) {
     assets: {
       ...(coverAsset ? { large_image: coverAsset } : {}),
       ...(coverAsset ? { large_text: gameData.gameName.slice(0, 128) } : {}),
-      // İstersen buraya small_image da ekleyebiliriz ama şimdilik gerek yok.
     },
     // Bu kısım Discord'un oyunu "kendi uygulamasıymış" gibi tanımasını sağlar
-    application_id: '1123691925289513092', // Rastgele bir oyun ID'si (Discord UI'da resimlerin çıkması için)
+    application_id: '1123691925289513092', 
   };
 }
 
