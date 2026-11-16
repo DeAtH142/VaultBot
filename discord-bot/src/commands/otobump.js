@@ -6,7 +6,7 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  MessageFlags // 🚨 DÜZELTME: Flags için eklendi
+  MessageFlags
 } from 'discord.js';
 import { getTokens } from '../utils/tokenStore.js';
 import {
@@ -123,12 +123,12 @@ export default {
       if (action === 'rapor') {
         return interaction.reply({ 
           embeds: [jobs.length === 0 ? createBumpDetailEmbed(interaction.user, null) : createBumpDetailEmbed(interaction.user, jobs[0])], 
-          flags: MessageFlags.Ephemeral // 🚨 DÜZELTİLDİ
+          flags: MessageFlags.Ephemeral 
         });
       }
 
       if (action === 'botlar' || action === 'bots') {
-        return interaction.reply({ embeds: [createBumpBotsEmbed()], flags: MessageFlags.Ephemeral }); // 🚨 DÜZELTİLDİ
+        return interaction.reply({ embeds: [createBumpBotsEmbed()], flags: MessageFlags.Ephemeral }); 
       }
 
       if (action === 'force') {
@@ -152,7 +152,7 @@ export default {
           });
         }
 
-        const options = tokens.slice(0, 25).map((t, i) => { // 🚨 Limit eklendi
+        const options = tokens.slice(0, 25).map((t, i) => { 
           const running = isBumpRunning(userId, i);
           return {
             label: (t.username || t.label || `Hesap ${i + 1}`).slice(0, 100),
@@ -309,7 +309,7 @@ export default {
 
         const channelInput = new TextInputBuilder()
           .setCustomId('channel_id')
-          .setLabel('Bump Kanal ID (bump komutunun çalıştığı kanal)')
+          .setLabel('Bump Kanal ID') // 🚨 DÜZELTİLDİ: 45 karakter sınırını aşmayacak şekilde kısaltıldı
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('1570472861322186915')
           .setRequired(true);
@@ -355,7 +355,7 @@ export default {
         return interaction.reply({ content: '❌ Yedek kanal ID geçersiz — boş bırak veya 15-20 haneli sayı gir.', flags: MessageFlags.Ephemeral });
       }
 
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral }); // 🚨 DÜZELTİLDİ
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
       const allTokens = getTokens(userId);
       const accounts = allTokens.map((_, i) => i).filter(i => i !== tokenIndex);
