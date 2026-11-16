@@ -114,6 +114,11 @@ async function resolveCoverAsset(client, coverUrl) {
 
 function buildPresenceState(state, coverAsset) {
   const t = state.track;
+  
+  // 🚨 ÇÖZÜM BURADA: Şarkı süresini alıp başlangıç zamanına ekliyoruz.
+  // Eğer şarkı süresi yoksa veya bozuksa varsayılan olarak 3 dakika (180000 ms) ekliyoruz.
+  const duration = Number(t.durationMs) > 0 ? Number(t.durationMs) : 180000; 
+
   return {
     name: 'Spotify',
     type: 2, // LISTENING
@@ -125,7 +130,10 @@ function buildPresenceState(state, coverAsset) {
       ...(coverAsset ? { large_image: coverAsset } : {}),
       large_text: (t.album || t.title).slice(0, 128),
     },
-    timestamps: { start: state.startedAt },
+    timestamps: { 
+      start: state.startedAt,
+      end: state.startedAt + duration // ⬅️ Bitiş zamanı eklendi! İlerleme çubuğu artık görünecek.
+    },
   };
 }
 
