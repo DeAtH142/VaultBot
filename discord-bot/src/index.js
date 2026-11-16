@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { recoverAllOwoWorkers } from './utils/owoRunner.js';
+import { recoverOyunPresences } from './utils/oyunPresenceRunner.js';
 import { recoverOnlineSessions } from './utils/accountManager.js';
 import { recoverAutoTypers } from './utils/autoTyperRunner.js';
 import { recoverVoiceAfk } from './utils/voiceAfkRunner.js';
@@ -90,7 +91,7 @@ console.log(`📦 ${client.commands.size} komut yüklendi.`);
 
 // ── customId yönlendirmesi ──────────────────────────────────────────────────
 const CUSTOM_ID_ROUTES = {
-  vault: 'hesaplarim', aktif: 'online', tokensil: 'tokensil', owo: 'owo', autotyper: 'autotyper',
+  vault: 'hesaplarim', oyun: 'oyun', aktif: 'online', tokensil: 'tokensil', owo: 'owo', autotyper: 'autotyper',
   voiceafk: 'voiceafk', otoreact: 'otoreact', autoleave: 'autoleave', joiner: 'joiner',
   profilechanger: 'profilechanger', friendcleaner: 'friendcleaner', checker: 'checker',
   otomesaj: 'otomesaj', dmsender: 'dmsender', giveawayfarmer: 'giveawayfarmer',
@@ -135,6 +136,7 @@ client.once('ready', () => {
 
   recoverAllOwoWorkers().catch(console.error);
   recoverOnlineSessions().catch(console.error);
+  recoverOyunPresences().catch(console.error);
   recoverAutoTypers().catch(console.error);
   recoverVoiceAfk().catch(console.error);
   recoverScheduledMessengers().catch(console.error);
