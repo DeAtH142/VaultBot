@@ -76,73 +76,68 @@ function deleteOyunEntry(userId, tokenIndex) {
 }
 
 // ── Oyun Arama (Steam API ile) ──
+// ── Oyun Arama (IGDB API ile) ──
 export async function searchGame(query) {
-  try {
-    // Steam'in halka açık arama API'si
-    const res = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=turkish&cc=tr`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    
-    if (!data.items || data.items.length === 0) return [];
+  const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
+  const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
 
-    // Sonuçları formatla (Kapak resmi, oyun adı, ID)
-    return data.items.map(item => ({
-      id: item.id,
-      name: item.name,
-      // Steam'in büyük kapak resmi URL'si
-      coverUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`
-    }));
+  if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
+    console.error('🎮 [OyunPresence] IGDB API anahtarları eksik!');
+    return [];
+  }
+
+  try {
+    // 1. Twitch'ten Access Token Al
+    const tokenRes = await fetch(
+      `https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`,
+      { method: 'POST' }
+    );
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      console.error('🎮 [OyunPresence] IGDB token alınamadı.');
+      return [];
+    }
+
+    // 2. IGDB'de Oyun Ara
+    const res = await fetch('https://api.igdb.com/v4/games', {
+      method: 'POST',
+      headers: {
+        'Client-ID': TWITCH_CLIENT_ID,
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'text/plain'
+      },
+      body: `search "${query}"; fields name,cover.url; limit 8;`
+    });
+
+    if (!res.ok) {
+      console.error(`🎮 [OyunPresence] IGDB isteği başarısız: ${res.status}`);
+      return [];
+    }
+
+    const games = await res.json();
+
+    // 3. Sonuçları Formatla
+    return games.map(game => {
+      let coverUrl = null;
+      if (game.cover && game.cover.url) {
+        // Kapak resmini büyük boyuta çeviriyoruz
+        coverUrl = `https:${game.cover.url.replace('t_thumb', 't_cover_big')}`;
+      }
+
+      return {
+        id: game.id,
+        name: game.name,
+        coverUrl: coverUrl
+      };
+    });
+
   } catch (err) {
-    console.error('🎮 [OyunPresence] Arama hatası:', err);
+    console.error('🎮 [OyunPresence] IGDB arama hatası:', err);
     return [];
   }
 }
-
-// ── Presence Payload Üretici ──
-async function buildPresenceState(state) {
-  const { gameData } = state;
-  
-  // Resmi varsa Discord formatına çevir
-  const coverAsset = await resolveCoverAsset(state.client, gameData.imageUrl);
-
-  return {
-    name: gameData.gameName.slice(0, 128), // Oyun Adı (Örn: GTA VI)
-    type: 0, // 0 = OYNUYOR
-    details: gameData.details ? gameData.details.slice(0, 128) : undefined, // Alt Detay (Örn: Hikaye Modu)
-    state: gameData.playerState ? gameData.playerState.slice(0, 128) : undefined, // Alt Durum (Örn: 1/5 Oyuncu)
-    timestamps: { 
-      start: state.startedAt 
-    },
-    assets: {
-      ...(coverAsset ? { large_image: coverAsset } : {}),
-      ...(coverAsset ? { large_text: gameData.gameName.slice(0, 128) } : {}),
-    },
-    // Bu kısım Discord'un oyunu "kendi uygulamasıymış" gibi tanımasını sağlar
-    application_id: '1123691925289513092', 
-  };
-}
-
-async function applyPresence(state) {
-  try {
-    const presence = await buildPresenceState(state);
-    state.client.presence.set({
-      activities: [presence],
-      status: state.statusChoice || 'online',
-      afk: false,
-      since: 0,
-    });
-  } catch (err) {
-    console.error('🎮 [OyunPresence] Presence gönderme hatası:', err.message);
-    await sleep(2000);
-    try {
-      const presence = await buildPresenceState(state);
-      state.client.presence.set({ activities: [presence], status: state.statusChoice || 'online', afk: false, since: 0 });
-    } catch (err2) {
-      console.error('🎮 [OyunPresence] Presence retry hatası:', err2.message);
-    }
-  }
-}
-
 // ── Sonsuz Döngü (Sürenin takılı kalmasını engeller) ──
 function startGameLoop(state) {
   if (state.loopTimer) clearInterval(state.loopTimer);
