@@ -15,7 +15,7 @@ import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Game Presence Engine');
 const MAX_SELECT_OPTIONS = 25;
-const pendingSearch = new Map(); // Arama sonuçlarını geçici tutar
+const pendingSearch = new Map();
 const PENDING_TTL_MS = 5 * 60 * 1000;
 
 export default {
@@ -53,7 +53,7 @@ export default {
         `**🟢 AKTİF OTURUMLAR**`,
         stats.length ? stats.join('\n') : '> ⚫ *Şu anda aktif oyun presence yok*',
       ].join('\n'))
-      .setFooter({ text: FOOTER() })
+      .setFooter(FOOTER()) // 🚨 DÜZELTİLDİ: Süslü parantezler kaldırıldı
       .setTimestamp();
 
     const rows = [
@@ -132,12 +132,12 @@ export default {
           .setTitle('📊 Oyun Presence Detayları')
           .setColor(0x2b2d31)
           .setDescription([`\`${THIN_DIVIDER}\``, ...lines, `\`${THIN_DIVIDER}\``].join('\n'))
-          .setFooter({ text: FOOTER() }).setTimestamp()],
+          .setFooter(FOOTER()) // 🚨 DÜZELTİLDİ
+          .setTimestamp()],
         flags: MessageFlags.Ephemeral,
       });
     }
 
-    // 🚨 ONAYLA BUTONU (Spotify'daki gibi)
     if (action === 'onayla') {
       const idx = Number(parts[1]);
       const pending = pendingSearch.get(userId);
@@ -165,7 +165,8 @@ export default {
             '> ♻️ Bot yeniden başlasa bile otomatik devam eder.',
           ].join('\n')
           : `> ⚠️ Hata: \`${res.error}\``)
-        .setFooter({ text: FOOTER() }).setTimestamp();
+        .setFooter(FOOTER()) // 🚨 DÜZELTİLDİ
+        .setTimestamp();
         
       return interaction.editReply({ embeds: [embed], components: [] });
     }
@@ -202,7 +203,6 @@ export default {
       });
     }
 
-    // 🚨 SONUÇ SEÇİLDİĞİNDE (Spotify'daki gibi)
     if (action === 'parcasec') {
       const idx = Number(parts[1]);
       const pending = pendingSearch.get(userId);
@@ -224,7 +224,7 @@ export default {
           '',
           '*Onaylırsan profilinde 7/24 bu oyunu oynuyor görünürsün.*',
         ].join('\n'))
-        .setFooter({ text: FOOTER() });
+        .setFooter(FOOTER()); // 🚨 DÜZELTİLDİ
 
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`oyun:onayla:${idx}:${interaction.values[0]}`).setLabel('Evet, Bunu!').setEmoji('✅').setStyle(ButtonStyle.Success),
@@ -244,21 +244,19 @@ export default {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    // 🚨 OTOMATİK ARAMA BAŞLIYOR
     const games = await searchGame(sorgu);
 
     if (games.length === 0) {
       return interaction.editReply({ content: `❌ \`${sorgu}\` için sonuç bulunamadı. Farklı bir isim dene.` });
     }
 
-    // Sonuçları kaydet
     pendingSearch.set(userId, { games, at: Date.now() });
 
     const embed = new EmbedBuilder()
       .setTitle(`🔍 Arama Sonuçları: "${sorgu}"`)
       .setColor(0x2b2d31)
       .setDescription(games.map((g, i) => `> **${i + 1}.** 🎮 **${g.name}**`).join('\n'))
-      .setFooter({ text: FOOTER() });
+      .setFooter(FOOTER()); // 🚨 DÜZELTİLDİ
 
     return interaction.editReply({
       embeds: [embed],
