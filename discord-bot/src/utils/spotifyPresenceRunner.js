@@ -1,7 +1,4 @@
 // src/utils/spotifyPresenceRunner.js — 🎧 Spotify Fake Presence Motoru
-// Vault'taki hesaba seçilen şarkıyı 7/24 "dinliyor" görünümü verir.
-// Rich presence (Spotify SVG cover, süre çubuğu, sıralı liste gösterimi).
-// Bot restart olsa bile kayıtlı oturumları Reboot Recovery ile kaldığı yerden sürer.
 import { SpotifyRPC } from 'discord.js-selfbot-v13';
 import { loginVaultAccount, destroyClient, sleep } from './selfbotHelpers.js';
 import { readSessions, writeSessions } from './sessionStore.js';
@@ -18,8 +15,7 @@ function startWatchdog() {
   watchdogTimer = setInterval(async () => {
     for (const [key, state] of [...runningSessions.entries()]) {
       try {
-        // Bağlantı kopmuş veya client ölmüşse oturumu yeniden kur
-        const dead = !state.client || state.client.ws?.status !== 0 /* READY */ && state.client.ws?.status !== undefined;
+        const dead = !state.client || state.client.ws?.status !== 0 && state.client.ws?.status !== undefined;
         const disconnected = state.client?.ws && typeof state.client.ws.status === 'number' && state.client.ws.status !== 0;
         if (dead || disconnected) {
           console.log(`🎧 [SpotifyPresence] ⚠️ Bağlantı koptu (${key}) — otomatik yeniden bağlanılıyor...`);
@@ -61,8 +57,7 @@ function deleteSpotifyEntry(userId, tokenIndex) {
   }
 }
 
-// ── Arama: iTunes Search API (ücretsiz, key gerektirmez) ───────────────────
-// Türkçe şarkılar US storefront'te bulunamaz; önce TR, boşsa US denenir.
+// ── Arama: iTunes Search API ───────────────────
 export async function searchTrack(query, limit = 8) {
   const base = 'https://itunes.apple.com/search?media=music&entity=song';
   const q = `&limit=${limit}&term=${encodeURIComponent(query)}`;
@@ -73,7 +68,7 @@ export async function searchTrack(query, limit = 8) {
       if (!res.ok) continue;
       const j = await res.json();
       if ((j.results || []).length > 0) { json = j; break; }
-    } catch { /* siradaki storefront */ }
+    } catch { }
   }
   if (!json) return [];
   return (json.results || []).map(r => ({
@@ -89,11 +84,8 @@ export async function searchTrack(query, limit = 8) {
 }
 
 // ── Presence payload üretici ────────────────────────────────────────────────
-// Kapak görünmesi için ŞART: harici URL'i Discord'un external-assets proxy'sine
-// düşürmek (mp:external/{hash} döner). Keyfi mp:<url> gateway tarafından REDDEDİLİR.
-// Spotify'ın gerçek application ID'si kullanılır ki profil Spotify görünümü çıksın.
 const SPOTIFY_APP_ID = '1336326530712000543';
-const coverProxyCache = new Map(); // coverUrl -> mp:external/{hash}
+const coverProxyCache = new Map();
 
 async function resolveCoverAsset(client, coverUrl) {
   if (!coverUrl) return undefined;
@@ -107,23 +99,19 @@ async function resolveCoverAsset(client, coverUrl) {
     coverProxyCache.set(coverUrl, asset);
     return asset;
   } catch (err) {
-    console.error('🎧 [SpotifyPresence] kapak proxy hatası:', err.message);
     return undefined;
   }
 }
 
 function buildPresenceState(state, coverAsset) {
   const t = state.track;
-  
-  // 🚨 ÇÖZÜM BURADA: Şarkı süresini alıp başlangıç zamanına ekliyoruz.
-  // Eğer şarkı süresi yoksa veya bozuksa varsayılan olarak 3 dakika (180000 ms) ekliyoruz.
   const duration = Number(t.durationMs) > 0 ? Number(t.durationMs) : 180000; 
 
   return {
     name: 'Spotify',
-    type: 2, // LISTENING
-    id: 'spotify:1', // Discord'un Spotify aktivitesini tanıması için
-    flags: 48, // SYNC + PLAY — gerçek Spotify görünümü
+    type: 2, 
+    id: 'spotify:1', 
+    flags: 48, 
     details: t.title.slice(0, 128),
     state: t.artist.slice(0, 128),
     assets: {
@@ -132,17 +120,13 @@ function buildPresenceState(state, coverAsset) {
     },
     timestamps: { 
       start: state.startedAt,
-      end: state.startedAt + duration // ⬅️ Bitiş zamanı eklendi! İlerleme çubuğu artık görünecek.
+      end: state.startedAt + duration 
     },
   };
 }
 
-// ── Presence uygulayıcı (selfbot-v13 üzerinden RPC gibi) ───────────────────
-// NOT: discord.js-selfbot-v13'te `client.user.setPresence()` YOKTUR.
-// Doğru API: client.presence.set({...}) — ClientPresence#set ws STATUS_UPDATE
-// komutunu (OP 3) gateway'e gönderir.
+// ── Presence uygulayıcı ───────────────────
 async function applyPresence(state) {
-  // Önce kapağı Discord proxy'sine düşür (başarısızsa kapaksız devam, presence yine çalışır)
   const coverAsset = await resolveCoverAsset(state.client, state.track.coverUrl);
   const presence = buildPresenceState(state, coverAsset);
   try {
@@ -153,8 +137,6 @@ async function applyPresence(state) {
       since: 0,
     });
   } catch (err) {
-    console.error('🎧 [SpotifyPresence] presence hatası:', err.message);
-    // Kısa bir retry — gateway hazır olmadan çağrı gelirse diye
     await sleep(2000);
     try {
       state.client.presence.set({
@@ -163,9 +145,7 @@ async function applyPresence(state) {
         afk: false,
         since: 0,
       });
-    } catch (err2) {
-      console.error('🎧 [SpotifyPresence] presence retry başarısız:', err2.message);
-    }
+    } catch (err2) {}
   }
 }
 
@@ -195,16 +175,28 @@ export function listRunningSpotify(userId) {
     .map(([k, s]) => ({ tokenIndex: Number(k.split(':')[1]), ...s }));
 }
 
-/**
- * Spotify fake presence başlat.
- * @param {string} userId
- * @param {number} tokenIndex
- * @param {{title,artist,album,coverUrl,durationMs,id,pageUrl}} track
- * @param {{statusChoice?:string, shuffleLoop?:boolean}} opts
- */
+// ── 🚨 YENİ: ŞARKI BİTİNCE BAŞA SARAN ZAMANLAYICI ──
+function startTrackLoop(state) {
+  if (state.loopTimer) clearInterval(state.loopTimer);
+
+  const duration = Number(state.track.durationMs) > 0 ? Number(state.track.durationMs) : 180000;
+
+  state.loopTimer = setInterval(async () => {
+    if (!runningSessions.has(`${state.userId}:${state.tokenIndex}`)) {
+      clearInterval(state.loopTimer);
+      return;
+    }
+    
+    // Süre bitti, başlangıç zamanını şu ana çek ve tekrar gönder
+    state.startedAt = Date.now();
+    console.log(`🎧 [SpotifyPresence] 🔄 Şarkı bitti, tekrar başlatılıyor: ${state.track.title}`);
+    
+    await applyPresence(state);
+  }, duration);
+}
+
 export async function startSpotifyPresence(userId, tokenIndex, track, opts = {}) {
   const key = `${userId}:${tokenIndex}`;
-  // Track doğrulaması — bozuk/eksik veriyle presence kurulmasın
   if (!track || typeof track.title !== 'string' || typeof track.artist !== 'string') {
     return { success: false, error: 'Geçersiz şarkı verisi' };
   }
@@ -221,6 +213,7 @@ export async function startSpotifyPresence(userId, tokenIndex, track, opts = {})
     startedAt: Date.now(),
     running: true,
     usernameFallback: client.user?.username,
+    loopTimer: null // Timer'ı state'e ekledik
   };
   runningSessions.set(key, state);
 
@@ -228,9 +221,12 @@ export async function startSpotifyPresence(userId, tokenIndex, track, opts = {})
     track, statusChoice: state.statusChoice, shuffleLoop: state.shuffleLoop, active: true,
   });
 
-  // Gateway tam hazır olmadan presence gönderilirse yutulur; teyit için biraz bekle
   await sleep(1000);
-  applyPresence(state);
+  await applyPresence(state);
+  
+  // Şarkı döngüsünü başlat
+  startTrackLoop(state);
+
   return { success: true, username: client.user?.username };
 }
 
@@ -242,9 +238,16 @@ export function stopSpotifyPresence(userId, tokenIndex, { silent = false } = {})
     return { success: false, error: 'Bu hesapta aktif Spotify presence yok' };
   }
   state.running = false;
+  
+  // 🚨 Döngüyü durdur
+  if (state.loopTimer) {
+    clearInterval(state.loopTimer);
+    state.loopTimer = null;
+  }
+
   try {
     state.client.presence.set({ activities: [], status: 'online', afk: false, since: 0 });
-  } catch { /* yut */ }
+  } catch { }
   destroyClient(state.client);
   runningSessions.delete(key);
   deleteSpotifyEntry(userId, tokenIndex);
@@ -261,7 +264,6 @@ export function stopAllSpotify(userId) {
   return stopped;
 }
 
-/** Bot açılırken kayıtlı aktif oturumları tekrar kurar */
 export async function recoverSpotifyPresences() {
   const store = readSpotifyStore();
   let revived = 0;
@@ -278,7 +280,6 @@ export async function recoverSpotifyPresences() {
   startWatchdog();
 }
 
-// Panelde "Hazır Liste" butonu için örnek şarkı havuzu
 export function getReadyPlaylist() {
   return SPOTIFY_PRESENCE_TRACKS;
 }
