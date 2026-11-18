@@ -135,10 +135,14 @@ function buildPages() {
 
 function renderPage(page, author) {
   const { release, fields } = page;
+  // Selfbot'ta author bazen partial User döner — displayAvatarURL olmayabilir
+  const icon = typeof author?.displayAvatarURL === 'function'
+    ? author.displayAvatarURL({ dynamic: true })
+    : undefined;
   return new EmbedBuilder()
     .setAuthor({
       name: `${BRAND.name} • Güncelleme Notları`,
-      iconURL: author.displayAvatarURL({ dynamic: true }),
+      ...(icon ? { iconURL: icon } : {}),
     })
     .setColor(release.color)
     .setTitle(`${E.rocket}  REXAL — ${release.title} ${release.version}`)

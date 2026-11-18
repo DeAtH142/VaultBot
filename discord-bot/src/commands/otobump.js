@@ -1,4 +1,4 @@
-// src/commands/otobump.js — 🚀 REXAL OTO BUMP (OwO tarzı panel)
+// src/commands/otobump.js — 🚀 REXAL OTO BUMP
 import {
   EmbedBuilder,
   ActionRowBuilder,
@@ -6,7 +6,7 @@ import {
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
-  MessageFlags
+  MessageFlags // 🚨 HATA ÇÖZÜMÜ 1: Ephemeral yerine Flags kullanacağız
 } from 'discord.js';
 import { getTokens } from '../utils/tokenStore.js';
 import {
@@ -24,13 +24,13 @@ import {
   createBumpDetailEmbed,
   createBumpBotsEmbed,
   createBumpStartedEmbed,
-  errorEmbed
 } from '../utils/embeds.js';
 import { COLORS, E, BRAND, UX, THIN_DIVIDER, DIVIDER } from '../utils/embeds.js';
 import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Bump Engine');
 
+/** Panel mesajını üret */
 function panelFor(user) {
   const jobs = getUserBumpJobs(user.id);
   const tokens = getTokens(user.id);
@@ -75,7 +75,7 @@ export default {
             .setColor(COLORS.danger)
             .setTitle(`${E.cross} Bump işleri durduruldu`)
             .setDescription(`> \`${stopped}\` iş durduruldu.`)
-            .setFooter(FOOTER())],
+            .setFooter({ text: FOOTER() })],
         });
       }
 
@@ -84,7 +84,7 @@ export default {
           embeds: [new EmbedBuilder()
             .setAuthor({ name: `${BRAND.name} • Oto Bump Yardım`, iconURL: message.client.user.displayAvatarURL({ dynamic: true }) })
             .setColor(COLORS.info)
-            .setTitle(`${E.rocket}  OTO BUMP — Komutlar`)
+            .setTitle(`${E.rocket} OTO BUMP — Komutlar`)
             .setDescription([
               `> ${UX.arrow} \`!otobump\` — Kontrol paneli`,
               `> ${UX.arrow} \`!otobump rapor\` — Detaylı istatistik`,
@@ -98,10 +98,11 @@ export default {
               `> 4. Sunucu ID + Kanal ID gir`,
               `> 5. Motor bump botunun cevabını okuyup **gerçek cooldown**'u öğrenir`,
             ].join('\n'))
-            .setFooter(FOOTER())],
+            .setFooter({ text: FOOTER() })],
         });
       }
 
+      // ── ANA PANEL ──
       await message.reply(panelFor(user));
     } catch (err) {
       console.error('❌ Otobump ana komut hatası:', err);
@@ -116,10 +117,12 @@ export default {
       const tokens = getTokens(userId);
       const jobs = getUserBumpJobs(userId);
 
+      // 🔄 Yenile
       if (action === 'yenile' || action === 'refresh') {
         return interaction.update(panelFor(interaction.user));
       }
 
+      // 📊 Rapor
       if (action === 'rapor') {
         return interaction.reply({ 
           embeds: [jobs.length === 0 ? createBumpDetailEmbed(interaction.user, null) : createBumpDetailEmbed(interaction.user, jobs[0])], 
@@ -127,10 +130,12 @@ export default {
         });
       }
 
+      // 🤖 Bump botları
       if (action === 'botlar' || action === 'bots') {
-        return interaction.reply({ embeds: [createBumpBotsEmbed()], flags: MessageFlags.Ephemeral }); 
+        return interaction.reply({ embeds: [createBumpBotsEmbed()], flags: MessageFlags.Ephemeral });
       }
 
+      // ⚡ Şimdi dene
       if (action === 'force') {
         if (jobs.length === 0) {
           return interaction.reply({ content: '❌ Çalışan iş yok.', flags: MessageFlags.Ephemeral });
@@ -144,6 +149,7 @@ export default {
         });
       }
 
+      // ➕ Hesap Seç & Başlat
       if (action === 'ekle' || action === 'start') {
         if (tokens.length === 0) {
           return interaction.reply({
@@ -152,7 +158,8 @@ export default {
           });
         }
 
-        const options = tokens.slice(0, 25).map((t, i) => { 
+        // 🚨 HATA ÇÖZÜMÜ 2: Maksimum 25 seçenek sınırı eklendi
+        const options = tokens.slice(0, 25).map((t, i) => {
           const running = isBumpRunning(userId, i);
           return {
             label: (t.username || t.label || `Hesap ${i + 1}`).slice(0, 100),
@@ -167,13 +174,8 @@ export default {
             .setAuthor({ name: `${BRAND.name} • Bump Engine`, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
             .setColor(COLORS.primary)
             .setTitle(`${E.rocket} Hesap Seçimi (${tokens.length} hesap)`)
-            .setDescription([
-              `> ${E.check} **Çalışan hesaplar menüde işaretli**`,
-              '> Bir hesap seçince **bump botu** seçimi açılacak.',
-              '',
-              DIVIDER,
-            ].join('\n'))
-            .setFooter(FOOTER())],
+            .setDescription([`> ${E.check} **Çalışan hesaplar menüde işaretli**`, '> Bir hesap seçince **bump botu** seçimi açılacak.', '', DIVIDER].join('\n'))
+            .setFooter({ text: FOOTER() })],
           components: [new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
               .setCustomId('otobump:hesapsec')
@@ -184,6 +186,7 @@ export default {
         });
       }
 
+      // 🛑 Durdur / Kaldır
       if (action === 'kaldir' || action === 'stop') {
         if (jobs.length === 0) {
           return interaction.reply({ content: '📭 Durdurulacak iş yok.', flags: MessageFlags.Ephemeral });
@@ -211,6 +214,7 @@ export default {
         });
       }
 
+      // ⛔ Tümünü durdur
       if (action === 'tumunudurdur') {
         let stopped = 0;
         for (const j of jobs) {
@@ -238,6 +242,7 @@ export default {
     try {
       const action = parts[0];
 
+      // Durdurma onayı
       if (action === 'durdursec' || action === 'stopconfirm') {
         const key = interaction.values[0];
         const [uid, idx] = key.split(':');
@@ -256,6 +261,7 @@ export default {
         });
       }
 
+      // Hesap seçildi → bot seçimi
       if (action === 'hesapsec') {
         const tokenIndex = parseInt(interaction.values[0], 10);
         const t = getTokens(interaction.user.id)[tokenIndex];
@@ -281,7 +287,7 @@ export default {
               `> ${E.warning} *Yanlış kanalda çalışan bot "yanlış kanal" hatası verirse*`,
               `> *yedek kanal seçeneğini doldur — motor otomatik oraya geçer.*`,
             ].join('\n'))
-            .setFooter(FOOTER())],
+            .setFooter({ text: FOOTER() })],
           components: [new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
               .setCustomId(`otobump:botsec:${tokenIndex}`)
@@ -291,6 +297,7 @@ export default {
         });
       }
 
+      // Bot seçildi → ayar formu
       if (action === 'botsec') {
         const tokenIndex = parseInt(parts[1], 10);
         const botKey = interaction.values[0];
@@ -309,7 +316,7 @@ export default {
 
         const channelInput = new TextInputBuilder()
           .setCustomId('channel_id')
-          .setLabel('Bump Kanal ID') // 🚨 DÜZELTİLDİ: 45 karakter sınırını aşmayacak şekilde kısaltıldı
+          .setLabel('Bump Kanal ID (bump komutunun çalıştığı kanal)')
           .setStyle(TextInputStyle.Short)
           .setPlaceholder('1570472861322186915')
           .setRequired(true);
