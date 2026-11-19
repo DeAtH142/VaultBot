@@ -2,7 +2,8 @@ name: VaultBot 7-24 Advanced
 
 on:
   schedule:
-    - cron: '0 */5 * * *'
+    # Her 3 saatte bir çalışır (0, 3, 6, 9...)
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +13,8 @@ concurrency:
 jobs:
   vaultbot:
     runs-on: ubuntu-latest
-    timeout-minutes: 280
+    # Timeout'u 2 saat 45 dakika yaptık, böylece 3 saatlik cron ile çakışmaz
+    timeout-minutes: 165
 
     steps:
       - name: 📥 Kodu Çek
@@ -22,7 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          # 🚨 CACHE AYARLARINI KALDIRDIK (Hata veriyordu)
 
       - name: 🛠️ Sistem Araçlarını Kur (FFmpeg ve Zip)
         run: |
@@ -46,6 +47,9 @@ jobs:
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_KEY=${{ secrets.CLOUDFLARE_API_KEY }}
+          TWITCH_CLIENT_ID=${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET=${{ secrets.TWITCH_CLIENT_SECRET }}
+          OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
           EOF
 
       - name: ☁️ Firebase'den Verileri Çek (Pull)
@@ -68,6 +72,7 @@ jobs:
           CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: node src/index.js
 
       - name: ☁️ Firebase'e Verileri Yükle (Push)
