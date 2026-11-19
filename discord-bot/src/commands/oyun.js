@@ -1,76 +1,96 @@
-// src/commands/oyun.js — 🎮 REXAL Oyun Fake Presence (Otomatik Arama)
+// src/commands/oyun.js — 🎮 REXAL Oyun Fake Presence (Herkese Açık Panel)
 import { selfbotDenyEmbed } from '../utils/accessGuard.js';
 import {
   EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
-  StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle,
-  MessageFlags
+  StringSelectMenuBuilder, MessageFlags
 } from 'discord.js';
 import { getTokens } from '../utils/tokenStore.js';
 import {
   isOyunRunning, getOyunStats, listRunningOyun,
-  startOyunPresence, stopOyunPresence, stopAllOyun, searchGame
+  startOyunPresence, stopOyunPresence, stopAllOyun
 } from '../utils/oyunPresenceRunner.js';
 import { COLORS, THIN_DIVIDER, BRAND, E } from '../utils/embeds.js';
 import { markStart, markStop } from '../utils/playtimeHooks.js';
 
 const FOOTER = () => BRAND.footer('Game Presence Engine');
-const MAX_SELECT_OPTIONS = 25;
-const pendingSearch = new Map();
-const PENDING_TTL_MS = 5 * 60 * 1000;
+
+// 🚨 OYUN LİSTESİ 🚨
+// Buraya istediğin oyunları ekleyebilirsin. assetKey, Discord Developer Portal'daki isimle aynı olmalı.
+const GAME_LIST = [
+  { name: 'Grand Theft Auto VI', assetKey: 'gta6' },
+  { name: 'Grand Theft Auto V', assetKey: 'gta5' },
+  { name: 'Valorant', assetKey: 'valorant' },
+  { name: 'Counter-Strike 2', assetKey: 'cs2' },
+  { name: 'League of Legends', assetKey: 'lol' },
+  { name: 'Minecraft', assetKey: 'minecraft' },
+  { name: 'Roblox', assetKey: 'roblox' },
+  { name: 'Fortnite', assetKey: 'fortnite' },
+  { name: 'PUBG', assetKey: 'pubg' },
+  { name: 'Among Us', assetKey: 'amongus' },
+  { name: 'Apex Legends', assetKey: 'apex' },
+  { name: 'Rocket League', assetKey: 'rocketleague' },
+  { name: 'Dota 2', assetKey: 'dota2' },
+  { name: 'Overwatch 2', assetKey: 'overwatch' },
+  { name: 'Elden Ring', assetKey: 'eldenring' },
+  { name: 'Cyberpunk 2077', assetKey: 'cyberpunk' },
+  { name: 'The Witcher 3', assetKey: 'witcher3' },
+  { name: 'Red Dead Redemption 2', assetKey: 'rdr2' },
+  { name: 'Terraria', assetKey: 'terraria' },
+  { name: 'Stardew Valley', assetKey: 'stardew' },
+  { name: 'Sea of Thieves', assetKey: 'seaofthieves' },
+  { name: 'Dead by Daylight', assetKey: 'dbd' },
+  { name: 'Rainbow Six Siege', assetKey: 'r6' },
+  { name: 'Team Fortress 2', assetKey: 'tf2' },
+  { name: 'Genshin Impact', assetKey: 'genshin' }
+];
+
+const ITEMS_PER_PAGE = 20;
 
 export default {
   name: 'oyun',
   aliases: ['game', 'oynuyor'],
-  description: 'REXAL — Otomatik Oyun Arama ve Fake Presence',
+  description: 'REXAL — Herkese Açık Oyun Fake Presence Sistemi',
 
   async execute(message) {
+    // Yetki kontrolü (İsteğe bağlı: Burayı silersen herkes !oyun yazıp panel atabilir)
     const _deny = selfbotDenyEmbed(message.author.id, '!oyun');
     if (_deny) return message.reply({ embeds: [_deny] });
     
-    const running = listRunningOyun(message.author.id);
-    const stats = running.map((s) => {
-      const st = getOyunStats(message.author.id, s.tokenIndex);
-      return `> 🎮 **${st.username || `Hesap #${s.tokenIndex + 1}`}** — **${st.gameName}** (⏱️ \`${st.durationMin} dk\`)`;
-    });
-
     const embed = new EmbedBuilder()
       .setColor(0x2b2d31)
-      .setAuthor({ name: `${BRAND.name} • Oyun Oynuyor Gösterme`, iconURL: message.client.user.displayAvatarURL() })
-      .setTitle('🎮 REXAL — Fake Game Presence')
+      .setAuthor({ name: `${BRAND.name} • Oyun Oynuyor Gösterme Sistemi`, iconURL: message.client.user.displayAvatarURL() })
+      .setTitle('🎮 REXAL — Fake Game Presence Paneli')
       .setThumbnail(message.client.user.displayAvatarURL({ dynamic: true, size: 256 }))
       .setDescription([
         `\`${THIN_DIVIDER}\``,
-        `> 🤖 **Sistem:** Oyun adını yazın, bot otomatik bulsun!`,
-        `> 🖼️ **Görsellik:** Oyunun gerçek kapak resmi ve süre sayacı profile yansır.`,
+        `> 🤖 **Sistem:** Hazır oyun listesinden seçim yapın, profiliniz anında güncellensin!`,
+        `> 🔒 **Gizlilik:** Bu panel herkese açıktır, butonlara basan herkes sadece kendi kasasındaki hesapları görür.`,
         '',
         `**📜 NASIL KULLANILIR?**`,
-        `> 1️⃣ Aşağıdaki **Başlat** butonuna tıklayın.`,
-        `> 2️⃣ Hangi kasadaki hesapta göstereceğinizi seçin.`,
-        `> 3️⃣ Oyunun adını yazın (örn: \`GTA VI\`, \`Valorant\`).`,
-        `> 4️⃣ Botun bulduğu sonuçlardan doğru olanı seçip onaylayın.`,
+        `> 1️⃣ Aşağıdaki **Oyun Menüsünü Aç** butonuna tıklayın.`,
+        `> 2️⃣ Karşınıza çıkan menüden kendi hesabınızı seçin.`,
+        `> 3️⃣ Sayfalar arası gezinerek istediğiniz oyunu bulun ve seçin.`,
+        `> 4️⃣ Profiliniz anında o oyunu oynuyor olarak güncellenecek!`,
         '',
         `\`${THIN_DIVIDER}\``,
-        `**🟢 AKTİF OTURUMLAR**`,
-        stats.length ? stats.join('\n') : '> ⚫ *Şu anda aktif oyun presence yok*',
       ].join('\n'))
-      .setFooter(FOOTER()) // 🚨 DÜZELTİLDİ: Süslü parantezler kaldırıldı
+      .setFooter(FOOTER())
       .setTimestamp();
 
     const rows = [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('oyun:baslat').setLabel('Oyun Ara & Başlat').setEmoji('🎮').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('oyun:durdur').setLabel('Durdur').setEmoji('🛑').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('oyun:durum').setLabel('İstatistikler').setEmoji('📊').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId('oyun:hepsini-kapat').setLabel('Tümünü Kapat').setEmoji('💀').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('oyun:baslat').setLabel('Oyun Menüsünü Aç').setEmoji('🎮').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('oyun:durdur').setLabel('Kendi Oyununu Durdur').setEmoji('🛑').setStyle(ButtonStyle.Danger),
       ),
     ];
 
+    // Paneli sunucuya atar
     await message.reply({ embeds: [embed], components: rows });
   },
 
   async onButton(interaction, parts) {
     const action = parts[0];
-    const userId = interaction.user.id;
+    const userId = interaction.user.id; // Butona basan kişinin ID'si
 
     if (action === 'baslat') {
       const tokens = getTokens(userId);
@@ -82,7 +102,7 @@ export default {
         content: '🎮 **Hangi hesabınızda oyun oynuyor görüneceksiniz?**',
         components: [new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder().setCustomId('oyun:hesapsec')
-            .addOptions(tokens.slice(0, MAX_SELECT_OPTIONS).map((t, i) => ({
+            .addOptions(tokens.slice(0, 25).map((t, i) => ({
               label: `${i + 1}. ${t.username || t.label || `Hesap ${i + 1}`}`.slice(0, 100),
               value: String(i),
               description: isOyunRunning(userId, i) ? '⚡ Şu an oyun oynuyor' : '⭕ Hazır',
@@ -95,9 +115,8 @@ export default {
 
     if (action === 'durdur') {
       const running = listRunningOyun(userId);
-      if (running.length === 0) {
-        return interaction.reply({ content: '⚫ Aktif oyun presence yok.', flags: MessageFlags.Ephemeral });
-      }
+      if (running.length === 0) return interaction.reply({ content: '⚫ Aktif oyun presence yok.', flags: MessageFlags.Ephemeral });
+      
       return interaction.reply({
         content: '🛑 **Hangi oturumu kapatmak istersiniz?**',
         components: [new ActionRowBuilder().addComponents(
@@ -111,68 +130,37 @@ export default {
       });
     }
 
-    if (action === 'hepsini-kapat') {
-      const running = listRunningOyun(userId);
-      const n = stopAllOyun(userId);
-      for (const s of running) markStop(userId, 'oyun', s.tokenIndex);
-      return interaction.reply({ content: `💀 Tüm oyun presence'ları kapatıldı (**${n}** adet).`, flags: MessageFlags.Ephemeral });
-    }
-
-    if (action === 'durum') {
-      const running = listRunningOyun(userId);
-      if (running.length === 0) return interaction.reply({ content: '⚫ Aktif oturum yok.', flags: MessageFlags.Ephemeral });
+    // Sayfa değiştirme butonları
+    if (action === 'sayfa') {
+      const page = Number(parts[1]);
+      const idx = Number(parts[2]);
       
-      const lines = running.map((s) => {
-        const st = getOyunStats(userId, s.tokenIndex);
-        return `> 🎮 **Hesap #${s.tokenIndex + 1}** — **${st.gameName}**\n> ⏱️ ${st.durationMin} dakikadır oynuyor`;
+      const start = (page - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageGames = GAME_LIST.slice(start, end);
+      const totalPages = Math.ceil(GAME_LIST.length / ITEMS_PER_PAGE);
+
+      const options = pageGames.map((g, i) => ({
+        label: g.name.slice(0, 100),
+        value: `${start + i}`, 
+        emoji: '🎮',
+      }));
+
+      const selectRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`oyun:oyunsec:${idx}`)
+          .addOptions(options)
+          .setPlaceholder(`Sayfa ${page}/${totalPages} — Oyun Seç...`)
+      );
+
+      const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`oyun:sayfa:${page - 1}:${idx}`).setLabel('⬅️ Önceki').setStyle(ButtonStyle.Secondary).setDisabled(page === 1),
+        new ButtonBuilder().setCustomId(`oyun:sayfa:${page + 1}:${idx}`).setLabel('Sonraki ➡️').setStyle(ButtonStyle.Secondary).setDisabled(page === totalPages),
+      );
+
+      return interaction.update({
+        content: `🎮 **Hesap #${idx + 1}** için oyun seçin:`,
+        components: [selectRow, btnRow]
       });
-      
-      return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setTitle('📊 Oyun Presence Detayları')
-          .setColor(0x2b2d31)
-          .setDescription([`\`${THIN_DIVIDER}\``, ...lines, `\`${THIN_DIVIDER}\``].join('\n'))
-          .setFooter(FOOTER()) // 🚨 DÜZELTİLDİ
-          .setTimestamp()],
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    if (action === 'onayla') {
-      const idx = Number(parts[1]);
-      const pending = pendingSearch.get(userId);
-      if (pending && Date.now() - pending.at > PENDING_TTL_MS) pendingSearch.delete(userId);
-      
-      const game = pending?.games[Number(parts[2])];
-      if (!game) return interaction.update({ content: '❌ Arama süresi doldu, yeniden arayın.', components: [], embeds: [] });
-
-      await interaction.deferUpdate();
-      const res = await startOyunPresence(userId, idx, { 
-        gameName: game.name, 
-        imageUrl: game.coverUrl 
-      }, { statusChoice: 'online' });
-      
-      if (res.success) markStart(userId, 'oyun', idx);
-
-      const embed = new EmbedBuilder()
-        .setTitle(res.success ? '🎮 Oyun Presence Aktif!' : '❌ Başlatılamadı')
-        .setColor(res.success ? 0x2b2d31 : COLORS.danger)
-        .setThumbnail(game.coverUrl)
-        .setDescription(res.success
-          ? [
-            `> 🎮 **${game.name}**`,
-            `> ✅ **${res.username ?? 'Hesap'}** profilinde artık bu oyunu oynuyor görünüyorsun.`,
-            '> ♻️ Bot yeniden başlasa bile otomatik devam eder.',
-          ].join('\n')
-          : `> ⚠️ Hata: \`${res.error}\``)
-        .setFooter(FOOTER()) // 🚨 DÜZELTİLDİ
-        .setTimestamp();
-        
-      return interaction.editReply({ embeds: [embed], components: [] });
-    }
-
-    if (action === 'vazgec') {
-      return interaction.update({ content: '❌ Vazgeçildi.', embeds: [], components: [] });
     }
   },
 
@@ -182,15 +170,66 @@ export default {
 
     if (action === 'hesapsec') {
       const idx = Number(interaction.values[0]);
-      const modal = new ModalBuilder().setCustomId(`oyun:arama:${idx}`).setTitle('🎮 Oyun Ara');
-      
-      const gameInput = new TextInputBuilder()
-        .setCustomId('oyunadi').setLabel('Hangi oyunu oynuyor görüneceksin?')
-        .setPlaceholder('Örn: GTA VI, Valorant, Minecraft, CS2')
-        .setStyle(TextInputStyle.Short).setRequired(true);
+      const page = 1;
+      const start = (page - 1) * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const pageGames = GAME_LIST.slice(start, end);
+      const totalPages = Math.ceil(GAME_LIST.length / ITEMS_PER_PAGE);
 
-      modal.addComponents(new ActionRowBuilder().addComponents(gameInput));
-      return interaction.showModal(modal);
+      const options = pageGames.map((g, i) => ({
+        label: g.name.slice(0, 100),
+        value: `${start + i}`,
+        emoji: '🎮',
+      }));
+
+      const selectRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`oyun:oyunsec:${idx}`)
+          .addOptions(options)
+          .setPlaceholder(`Sayfa 1/${totalPages} — Oyun Seç...`)
+      );
+
+      const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`oyun:sayfa:${page - 1}:${idx}`).setLabel('⬅️ Önceki').setStyle(ButtonStyle.Secondary).setDisabled(page === 1),
+        new ButtonBuilder().setCustomId(`oyun:sayfa:${page + 1}:${idx}`).setLabel('Sonraki ➡️').setStyle(ButtonStyle.Secondary).setDisabled(page === totalPages),
+      );
+
+      return interaction.update({
+        content: `🎮 **Hesap #${idx + 1}** için oyun seçin:`,
+        components: [selectRow, btnRow]
+      });
+    }
+
+    if (action === 'oyunsec') {
+      const idx = Number(parts[1]);
+      const globalIndex = Number(interaction.values[0]);
+      const game = GAME_LIST[globalIndex];
+
+      await interaction.deferUpdate();
+
+      const res = await startOyunPresence(userId, idx, { 
+        gameName: game.name, 
+        details: null, 
+        playerState: null,
+        imageUrl: null,
+        assetKey: game.assetKey 
+      }, { statusChoice: 'online' });
+      
+      if (res.success) markStart(userId, 'oyun', idx);
+
+      const embed = new EmbedBuilder()
+        .setTitle(res.success ? '🎮 Oyun Presence Aktif!' : '❌ Başlatılamadı')
+        .setColor(res.success ? 0x2b2d31 : COLORS.danger)
+        .setDescription(res.success
+          ? [
+            `> 🎮 **${game.name}**`,
+            `> ✅ **${res.username ?? 'Hesap'}** profilinde artık bu oyunu oynuyor görünüyorsun.`,
+            '> ♻️ Bot yeniden başlasa bile otomatik devam eder.',
+          ].join('\n')
+          : `> ⚠️ Hata: \`${res.error}\``)
+        .setFooter(FOOTER())
+        .setTimestamp();
+        
+      return interaction.editReply({ content: null, embeds: [embed], components: [] });
     }
 
     if (action === 'durdursec') {
@@ -202,73 +241,5 @@ export default {
         components: [],
       });
     }
-
-    if (action === 'parcasec') {
-      const idx = Number(parts[1]);
-      const pending = pendingSearch.get(userId);
-      if (pending && Date.now() - pending.at > PENDING_TTL_MS) {
-        pendingSearch.delete(userId);
-        return interaction.update({ content: '⌛ Arama süresi doldu (5 dk).', embeds: [], components: [] });
-      }
-      
-      const games = pending?.games ?? [];
-      const game = games[Number(interaction.values[0])];
-      if (!game) return interaction.update({ content: '❌ Oyun bulunamadı.', components: [] });
-
-      const embed = new EmbedBuilder()
-        .setTitle('🎮 Bu oyun mu?')
-        .setColor(0x2b2d31)
-        .setThumbnail(game.coverUrl)
-        .setDescription([
-          `> 🎮 **${game.name}**`,
-          '',
-          '*Onaylırsan profilinde 7/24 bu oyunu oynuyor görünürsün.*',
-        ].join('\n'))
-        .setFooter(FOOTER()); // 🚨 DÜZELTİLDİ
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`oyun:onayla:${idx}:${interaction.values[0]}`).setLabel('Evet, Bunu!').setEmoji('✅').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('oyun:vazgec').setLabel('Vazgeç').setEmoji('❌').setStyle(ButtonStyle.Danger),
-      );
-      return interaction.update({ content: '', embeds: [embed], components: [row] });
-    }
-  },
-
-  async onModalSubmit(interaction, parts) {
-    const action = parts[0];
-    const userId = interaction.user.id;
-
-    if (action !== 'arama') return;
-    const idx = Number(parts[1]);
-    const sorgu = interaction.fields.getTextInputValue('oyunadi').trim();
-
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    const games = await searchGame(sorgu);
-
-    if (games.length === 0) {
-      return interaction.editReply({ content: `❌ \`${sorgu}\` için sonuç bulunamadı. Farklı bir isim dene.` });
-    }
-
-    pendingSearch.set(userId, { games, at: Date.now() });
-
-    const embed = new EmbedBuilder()
-      .setTitle(`🔍 Arama Sonuçları: "${sorgu}"`)
-      .setColor(0x2b2d31)
-      .setDescription(games.map((g, i) => `> **${i + 1}.** 🎮 **${g.name}**`).join('\n'))
-      .setFooter(FOOTER()); // 🚨 DÜZELTİLDİ
-
-    return interaction.editReply({
-      embeds: [embed],
-      components: [new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder().setCustomId(`oyun:parcasec:${idx}`)
-          .addOptions(games.map((g, i) => ({
-            label: `${i + 1}. ${g.name}`.slice(0, 100),
-            value: String(i),
-            emoji: '🎮',
-          })))
-          .setPlaceholder('🔍 Oyun seç...'),
-      )],
-    });
-  },
+  }
 };
