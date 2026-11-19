@@ -28,20 +28,9 @@ const GAME_LIST = [
   { name: 'PUBG', assetKey: 'pubg' },
   { name: 'Among Us', assetKey: 'amongus' },
   { name: 'Apex Legends', assetKey: 'apex' },
-  { name: 'Rocket League', assetKey: 'rocketleague' },
   { name: 'Dota 2', assetKey: 'dota2' },
   { name: 'Overwatch 2', assetKey: 'overwatch' },
-  { name: 'Elden Ring', assetKey: 'eldenring' },
-  { name: 'Cyberpunk 2077', assetKey: 'cyberpunk' },
-  { name: 'The Witcher 3', assetKey: 'witcher3' },
-  { name: 'Red Dead Redemption 2', assetKey: 'rdr2' },
-  { name: 'Terraria', assetKey: 'terraria' },
-  { name: 'Stardew Valley', assetKey: 'stardew' },
   { name: 'Sea of Thieves', assetKey: 'seaofthieves' },
-  { name: 'Dead by Daylight', assetKey: 'dbd' },
-  { name: 'Rainbow Six Siege', assetKey: 'r6' },
-  { name: 'Team Fortress 2', assetKey: 'tf2' },
-  { name: 'Genshin Impact', assetKey: 'genshin' }
 ];
 
 const ITEMS_PER_PAGE = 20;
