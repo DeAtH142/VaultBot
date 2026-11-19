@@ -2,19 +2,19 @@ name: VaultBot 7-24 Advanced
 
 on:
   schedule:
-    # Her 3 saatte bir çalışır (0, 3, 6, 9...)
-    - cron: '0 */3 * * *'
+    # 🚨 Her 4 saatte bir çalışır (0, 4, 8, 12...). 
+    # 4 saat = 240 dakika. Timeout'u 230 yaparak çakışmayı önlüyoruz.
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 
-concurrency:
-  group: vaultbot-run
-  cancel-in-progress: true
+# 🚨 CONCURRENCY KALDIRILDI: Eski iş bitmeden yeni iş gelirse GitHub'ın botu iptal etmesini önlüyoruz.
+# Bu sayede bot asla boşta kalmaz.
 
 jobs:
   vaultbot:
     runs-on: ubuntu-latest
-    # Timeout'u 2 saat 45 dakika yaptık, böylece 3 saatlik cron ile çakışmaz
-    timeout-minutes: 165
+    # 4 saatlik sürenin 10 dakika öncesinde kesiyoruz ki yenisi sorunsuz başlasın.
+    timeout-minutes: 230 
 
     steps:
       - name: 📥 Kodu Çek
@@ -76,7 +76,7 @@ jobs:
         run: node src/index.js
 
       - name: ☁️ Firebase'e Verileri Yükle (Push)
-        if: always()
+        if: always() # 🚨 Bot kapansa veya hata verse bile verileri (tokenler, süreler) mutlaka kaydet!
         working-directory: ./discord-bot
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
