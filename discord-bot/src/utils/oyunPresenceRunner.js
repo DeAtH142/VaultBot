@@ -1,16 +1,14 @@
 // src/utils/oyunPresenceRunner.js — 🎮 REXAL Oyun Fake Presence Motoru
-// Bu motor, selfbot üzerinden istediğin oyunu, otomatik arama ve kapak resmiyle 7/24 oynuyor gibi gösterir.
 import { loginVaultAccount, destroyClient, sleep } from './selfbotHelpers.js';
 import { readSessions, writeSessions } from './sessionStore.js';
 import { RichPresence } from 'discord.js-selfbot-v13';
 
-const runningSessions = new Map(); // `${userId}:${tokenIndex}` -> state
+const runningSessions = new Map();
 const WATCHDOG_MS = 60_000;
 let watchdogTimer = null;
 
-// Discord dış görsel (kapak) proxy sistemi
-const SPOTIFY_APP_ID = '1336326530712000543'; // Discord bize uygulama bazlı resim çekme izni verdiği için bunu kullanıyoruz.
-const coverProxyCache = new Map(); 
+const SPOTIFY_APP_ID = '1336326530712000543';
+const coverProxyCache = new Map();
 
 async function resolveCoverAsset(client, imageUrl) {
   if (!imageUrl) return undefined;
@@ -28,7 +26,6 @@ async function resolveCoverAsset(client, imageUrl) {
   }
 }
 
-// ── Watchdog: Kopan bağlantıları otomatik kurtarır ──
 function startWatchdog() {
   if (watchdogTimer) return;
   watchdogTimer = setInterval(async () => {
@@ -56,7 +53,6 @@ function startWatchdog() {
   console.log(`🎮 [OyunPresence] 👁 Watchdog açık (${WATCHDOG_MS / 1000} sn).`);
 }
 
-// ── Veri Katmanı (Firebase ve Yerel JSON için) ──
 function readOyunStore() {
   const store = readSessions();
   return store.oyun || {};
@@ -75,73 +71,93 @@ function deleteOyunEntry(userId, tokenIndex) {
   }
 }
 
-// ── Oyun Arama (Steam API ile) ──
-// ── Oyun Arama (IGDB API ile) ──
+// ── Oyun Arama (NEXARDA + Steam Fallback) ──
+// NEXARDA: Ücretsiz, API anahtarı gerektirmez, çok geniş oyun veritabanı.
+// Steam: Yedek olarak kalır, anahtarsız çalışır.
 export async function searchGame(query) {
-  const TWITCH_CLIENT_ID = process.env.TWITCH_CLIENT_ID;
-  const TWITCH_CLIENT_SECRET = process.env.TWITCH_CLIENT_SECRET;
-
-  if (!TWITCH_CLIENT_ID || !TWITCH_CLIENT_SECRET) {
-    console.error('🎮 [OyunPresence] IGDB API anahtarları eksik!');
-    return [];
+  // 1. NEXARDA API'yi dene
+  try {
+    const nexardaUrl = `https://www.nexarda.com/api/v3/search?type=games&q=${encodeURIComponent(query)}`;
+    const nexardaRes = await fetch(nexardaUrl);
+    
+    if (nexardaRes.ok) {
+      const nexardaData = await nexardaRes.json();
+      if (nexardaData.success && nexardaData.results?.items?.length > 0) {
+        return nexardaData.results.items.slice(0, 8).map(item => {
+          const gameInfo = item.game_info || {};
+          return {
+            id: gameInfo.id || item.slug,
+            name: gameInfo.name || item.title,
+            coverUrl: item.image || null
+          };
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('🎮 [OyunPresence] NEXARDA arama hatası, Steam deneniyor:', err.message);
   }
 
+  // 2. Steam API'yi dene (NEXARDA sonuç vermezse)
   try {
-    // 1. Twitch'ten Access Token Al
-    const tokenRes = await fetch(
-      `https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`,
-      { method: 'POST' }
-    );
-    const tokenData = await tokenRes.json();
-    const accessToken = tokenData.access_token;
+    const steamRes = await fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=turkish&cc=tr`);
+    if (!steamRes.ok) return [];
+    
+    const steamData = await steamRes.json();
+    if (!steamData.items || steamData.items.length === 0) return [];
 
-    if (!accessToken) {
-      console.error('🎮 [OyunPresence] IGDB token alınamadı.');
-      return [];
-    }
-
-    // 2. IGDB'de Oyun Ara
-    const res = await fetch('https://api.igdb.com/v4/games', {
-      method: 'POST',
-      headers: {
-        'Client-ID': TWITCH_CLIENT_ID,
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'text/plain'
-      },
-      body: `search "${query}"; fields name,cover.url; limit 8;`
-    });
-
-    if (!res.ok) {
-      console.error(`🎮 [OyunPresence] IGDB isteği başarısız: ${res.status}`);
-      return [];
-    }
-
-    const games = await res.json();
-
-    // 3. Sonuçları Formatla
-    return games.map(game => {
-      let coverUrl = null;
-      if (game.cover && game.cover.url) {
-        // Kapak resmini büyük boyuta çeviriyoruz
-        coverUrl = `https:${game.cover.url.replace('t_thumb', 't_cover_big')}`;
-      }
-
-      return {
-        id: game.id,
-        name: game.name,
-        coverUrl: coverUrl
-      };
-    });
-
+    return steamData.items.slice(0, 8).map(item => ({
+      id: item.id,
+      name: item.name,
+      coverUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${item.id}/header.jpg`
+    }));
   } catch (err) {
-    console.error('🎮 [OyunPresence] IGDB arama hatası:', err);
+    console.error('🎮 [OyunPresence] Steam arama hatası:', err);
     return [];
   }
 }
-// ── Sonsuz Döngü (Sürenin takılı kalmasını engeller) ──
+
+// ── Presence Payload Üretici ──
+async function buildPresenceState(state) {
+  const { gameData } = state;
+  const coverAsset = await resolveCoverAsset(state.client, gameData.imageUrl);
+
+  return {
+    name: gameData.gameName.slice(0, 128),
+    type: 0,
+    details: gameData.details ? gameData.details.slice(0, 128) : undefined,
+    state: gameData.playerState ? gameData.playerState.slice(0, 128) : undefined,
+    timestamps: { start: state.startedAt },
+    assets: {
+      ...(coverAsset ? { large_image: coverAsset } : {}),
+      ...(coverAsset ? { large_text: gameData.gameName.slice(0, 128) } : {}),
+    },
+    application_id: '1123691925289513092',
+  };
+}
+
+async function applyPresence(state) {
+  try {
+    const presence = await buildPresenceState(state);
+    state.client.presence.set({
+      activities: [presence],
+      status: state.statusChoice || 'online',
+      afk: false,
+      since: 0,
+    });
+  } catch (err) {
+    console.error('🎮 [OyunPresence] Presence gönderme hatası:', err.message);
+    await sleep(2000);
+    try {
+      const presence = await buildPresenceState(state);
+      state.client.presence.set({ activities: [presence], status: state.statusChoice || 'online', afk: false, since: 0 });
+    } catch (err2) {
+      console.error('🎮 [OyunPresence] Presence retry hatası:', err2.message);
+    }
+  }
+}
+
 function startGameLoop(state) {
   if (state.loopTimer) clearInterval(state.loopTimer);
-  // Her 2 saatte bir süreyi sıfırlar (Oyunlar için ideal)
   state.loopTimer = setInterval(async () => {
     if (!runningSessions.has(`${state.userId}:${state.tokenIndex}`)) {
       clearInterval(state.loopTimer);
@@ -150,10 +166,9 @@ function startGameLoop(state) {
     state.startedAt = Date.now();
     console.log(`🎮 [OyunPresence] 🔄 Süre sıfırlandı: ${state.gameData.gameName}`);
     await applyPresence(state);
-  }, 2 * 60 * 60 * 1000); 
+  }, 2 * 60 * 60 * 1000);
 }
 
-// ── Dışa Aktarılan Fonksiyonlar ──
 export function isOyunRunning(userId, tokenIndex) {
   return runningSessions.has(`${userId}:${tokenIndex}`);
 }
