@@ -119,19 +119,28 @@ export async function searchGame(query) {
 // ── Presence Payload Üretici ──
 async function buildPresenceState(state) {
   const { gameData } = state;
-  const coverAsset = await resolveCoverAsset(state.client, gameData.imageUrl);
+  
+  // 🚨 ŞİMDİLİK KAPATTIK: Resim yüzünden profil çökmemesi için assets'i devre dışı bıraktık.
+  // const coverAsset = await resolveCoverAsset(state.client, gameData.imageUrl);
 
   return {
     name: gameData.gameName.slice(0, 128),
-    type: 0,
+    type: 0, // 0 = OYNUYOR
     details: gameData.details ? gameData.details.slice(0, 128) : undefined,
     state: gameData.playerState ? gameData.playerState.slice(0, 128) : undefined,
-    timestamps: { start: state.startedAt },
-    assets: {
-      ...(coverAsset ? { large_image: coverAsset } : {}),
-      ...(coverAsset ? { large_text: gameData.gameName.slice(0, 128) } : {}),
+    timestamps: { 
+      start: state.startedAt 
     },
-    application_id: '1123691925289513092',
+    
+    // 🚨 KRİTİK: BURAYA KENDİ BOTUNUN ID'SİNİ YAZMALISIN!
+    // Discord'da botuna sağ tıkla -> Uygulama ID'sini Kopyala -> Buraya yapıştır.
+    application_id: '1525831686011490334', 
+    
+    // Resimler test bittikten sonra açılacak:
+    // assets: {
+    //   ...(coverAsset ? { large_image: coverAsset } : {}),
+    //   ...(coverAsset ? { large_text: gameData.gameName.slice(0, 128) } : {}),
+    // },
   };
 }
 
