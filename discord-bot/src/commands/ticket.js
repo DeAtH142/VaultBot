@@ -21,66 +21,67 @@ const STORE_PATH = path.join(DATA_DIR, 'tickets.json');
 const ACTIVE_STATUSES = new Set(['open', 'claimed', 'waiting_user']);
 const OPENING_USERS = new Set();
 const TRANSCRIPT_LIMIT = 300;
+const BRAND_COLOR = 0x6C5CE7;
 
 const CATEGORIES = {
   giveaway: {
     label: 'Çekiliş Kazandım',
     emoji: '🎉',
     description: 'Ödül ve kazanan talebi',
-    checklist: 'Çekiliş bağlantısını ve kazandığın ödülü hazırla. Görsel kanıtını ticket açılınca kanala gönderebilirsin.',
+    color: 0xF1A33C,
     fields: [
-      { id: 'giveawayLink', label: 'Çekiliş bağlantısı', style: TextInputStyle.Short, maxLength: 200 },
-      { id: 'prize', label: 'Kazandığın ödül', style: TextInputStyle.Short, maxLength: 100 },
-      { id: 'details', label: 'Talebinle ilgili ek bilgi', style: TextInputStyle.Paragraph, maxLength: 700 },
+      { id: 'giveawayLink', label: 'Çekiliş bağlantısı', placeholder: 'Çekiliş mesajının bağlantısını yapıştır', style: TextInputStyle.Short, maxLength: 200 },
+      { id: 'prize', label: 'Kazandığın ödül', placeholder: 'Örn. Nitro, rol veya ürün', style: TextInputStyle.Short, maxLength: 100 },
+      { id: 'details', label: 'Ek bilgi', placeholder: 'Kazandığını nasıl doğrulayabiliriz?', style: TextInputStyle.Paragraph, maxLength: 700 },
     ],
   },
   bug: {
     label: 'Bug / Hata Bildir',
     emoji: '🐞',
     description: 'Bir hata veya teknik aksaklık bildir',
-    checklist: 'Hatanın olduğu özelliği, tekrarlama adımlarını ve beklediğin sonucu yaz. Ekran görüntüsü ekleyebilirsin.',
+    color: 0xE05A67,
     fields: [
-      { id: 'feature', label: 'Hata hangi özellikte oluştu?', style: TextInputStyle.Short, maxLength: 100 },
-      { id: 'steps', label: 'Hata nasıl tekrarlanır?', style: TextInputStyle.Paragraph, maxLength: 700 },
-      { id: 'expected', label: 'Beklediğin sonuç / aldığın hata', style: TextInputStyle.Paragraph, maxLength: 700 },
+      { id: 'feature', label: 'Hata hangi özellikte oluştu?', placeholder: 'Özelliğin veya kanalın adı', style: TextInputStyle.Short, maxLength: 100 },
+      { id: 'steps', label: 'Hata nasıl tekrarlanır?', placeholder: '1) ...  2) ...  3) ...', style: TextInputStyle.Paragraph, maxLength: 700 },
+      { id: 'expected', label: 'Beklediğin / gördüğün sonuç', placeholder: 'Ne olmasını bekliyordun, ne oldu?', style: TextInputStyle.Paragraph, maxLength: 700 },
     ],
   },
   staff: {
     label: 'Yetkili Başvurusu',
     emoji: '🛡️',
     description: 'Yetkili ekibine katılma başvurusu',
-    checklist: 'Başvurunu açık ve doğru bilgilerle doldur. Ekip başvurunu ticket üzerinden değerlendirecek.',
+    color: 0x8B6CE8,
     fields: [
-      { id: 'experience', label: 'Önceki yetkili deneyimin', style: TextInputStyle.Paragraph, maxLength: 700 },
-      { id: 'availability', label: 'Aktif olabildiğin gün/saatler', style: TextInputStyle.Short, maxLength: 150 },
-      { id: 'motivation', label: 'Neden ekibe katılmak istiyorsun?', style: TextInputStyle.Paragraph, maxLength: 700 },
+      { id: 'experience', label: 'Önceki yetkili deneyimin', placeholder: 'Varsa sunucuları ve görevlerini anlat', style: TextInputStyle.Paragraph, maxLength: 700 },
+      { id: 'availability', label: 'Aktif olabildiğin gün/saatler', placeholder: 'Örn. hafta içi 18.00–22.00', style: TextInputStyle.Short, maxLength: 150 },
+      { id: 'motivation', label: 'Neden ekibe katılmak istiyorsun?', placeholder: 'Kısaca kendini ve motivasyonunu anlat', style: TextInputStyle.Paragraph, maxLength: 700 },
     ],
   },
   support: {
     label: 'Teknik Destek',
     emoji: '🧰',
     description: 'Kurulum, kullanım veya hesap desteği',
-    checklist: 'Sorunu yaşadığın cihazı/uygulamayı ve gördüğün hata mesajını belirt. Şifre veya token paylaşma.',
+    color: 0x35AFA1,
     fields: [
-      { id: 'topic', label: 'Hangi konuda destek gerekiyor?', style: TextInputStyle.Short, maxLength: 150 },
-      { id: 'details', label: 'Sorunu ayrıntılı anlat', style: TextInputStyle.Paragraph, maxLength: 800 },
-      { id: 'attempted', label: 'Şimdiye kadar ne denedin?', style: TextInputStyle.Paragraph, maxLength: 500, required: false },
+      { id: 'topic', label: 'Hangi konuda destek gerekiyor?', placeholder: 'Örn. kurulum, kullanım, hesap', style: TextInputStyle.Short, maxLength: 150 },
+      { id: 'details', label: 'Sorunu ayrıntılı anlat', placeholder: 'Ne oldu? Hangi cihazı/uygulamayı kullanıyorsun?', style: TextInputStyle.Paragraph, maxLength: 800 },
+      { id: 'attempted', label: 'Şimdiye kadar ne denedin?', placeholder: 'Denemediysen boş bırakabilirsin', style: TextInputStyle.Paragraph, maxLength: 500, required: false },
     ],
   },
   other: {
     label: 'Diğer',
     emoji: '💬',
     description: 'Listede olmayan bir talebin varsa',
-    checklist: 'Konunu kısaca belirt ve ekibin yardımcı olabilmesi için gerekli ayrıntıları yaz.',
+    color: 0x5D8FEA,
     fields: [
-      { id: 'topic', label: 'Talep konusu', style: TextInputStyle.Short, maxLength: 150 },
-      { id: 'details', label: 'Talebini ayrıntılı anlat', style: TextInputStyle.Paragraph, maxLength: 900 },
+      { id: 'topic', label: 'Talep konusu', placeholder: 'Konunu birkaç kelimeyle yaz', style: TextInputStyle.Short, maxLength: 150 },
+      { id: 'details', label: 'Talebini ayrıntılı anlat', placeholder: 'Ekibin yardımcı olabilmesi için gerekenleri yaz', style: TextInputStyle.Paragraph, maxLength: 900 },
     ],
   },
 };
 
 function emptyStore() {
-  return { version: 1, nextId: 1, tickets: {} };
+  return { version: 1, nextId: 1, tickets: {}, panels: {} };
 }
 
 function ensureStoreFile() {
@@ -105,6 +106,7 @@ function readStore() {
   if (!store || !Number.isInteger(store.nextId) || !store.tickets || typeof store.tickets !== 'object') {
     throw new Error('[Ticket] data/tickets.json beklenen ticket veri biçiminde değil.');
   }
+  if (!store.panels || typeof store.panels !== 'object') store.panels = {};
   return store;
 }
 
@@ -123,16 +125,33 @@ function getCategory(categoryId) {
   return CATEGORIES[categoryId] || null;
 }
 
-function getSupportRoleIds() {
-  const roleIds = TICKET_CONFIG.supportRoleIds;
+function validateSupportRoleIds(roleIds) {
   if (!Array.isArray(roleIds) || roleIds.some(roleId => typeof roleId !== 'string' || !/^\d{17,20}$/.test(roleId))) {
-    throw new Error('TICKET_CONFIG.supportRoleIds değerleri tırnak içinde Discord rol ID’si olmalıdır.');
+    throw new Error('Ticket destek rol ayarları, tırnak içinde Discord rol ID’lerinden oluşan diziler olmalıdır.');
   }
   return roleIds;
 }
 
+function getSupportRoleIds(categoryId) {
+  const topicRoles = TICKET_CONFIG.supportRoleIdsByCategory?.[categoryId];
+  const roleIds = Array.isArray(topicRoles) && topicRoles.length
+    ? topicRoles
+    : TICKET_CONFIG.supportRoleIds;
+  return validateSupportRoleIds(roleIds);
+}
+
+function getAllSupportRoleIds() {
+  const topicRoleLists = Object.values(TICKET_CONFIG.supportRoleIdsByCategory || {});
+  topicRoleLists.forEach(validateSupportRoleIds);
+  const topicRoles = topicRoleLists.flat();
+  return [...new Set([
+    ...validateSupportRoleIds(TICKET_CONFIG.supportRoleIds),
+    ...validateSupportRoleIds(topicRoles),
+  ])];
+}
+
 function hasStaffRole(member) {
-  const configuredRoles = getSupportRoleIds();
+  const configuredRoles = getAllSupportRoleIds();
   if (configuredRoles.length === 0) return false;
 
   const roles = member?.roles;
@@ -143,6 +162,14 @@ function hasStaffRole(member) {
 
 function isStaff(userId, member) {
   return userId === TICKET_CONFIG.ownerId || hasStaffRole(member);
+}
+
+function isTicketStaff(userId, member, categoryId) {
+  if (userId === TICKET_CONFIG.ownerId) return true;
+  const roles = member?.roles;
+  if (roles?.cache) return getSupportRoleIds(categoryId).some(roleId => roles.cache.has(roleId));
+  if (Array.isArray(roles)) return getSupportRoleIds(categoryId).some(roleId => roles.includes(roleId));
+  return false;
 }
 
 function getTicket(ticketId) {
@@ -160,7 +187,7 @@ function findActiveTicket(guildId, userId) {
   ) || null;
 }
 
-function supportOverwrites(guild, userId, includeSend = true, voice = false) {
+function supportOverwrites(guild, userId, includeSend = true, voice = false, categoryId) {
   const allowUser = [
     PermissionFlagsBits.ViewChannel,
     PermissionFlagsBits.ReadMessageHistory,
@@ -184,7 +211,7 @@ function supportOverwrites(guild, userId, includeSend = true, voice = false) {
     { id: userId, type: OverwriteType.Member, allow: allowUser },
   ];
 
-  for (const roleId of getSupportRoleIds()) {
+  for (const roleId of getSupportRoleIds(categoryId)) {
     overwrites.push({ id: roleId, type: OverwriteType.Role, allow: supportPermissions });
   }
 
@@ -211,27 +238,40 @@ function supportOverwrites(guild, userId, includeSend = true, voice = false) {
   return overwrites;
 }
 
-function makePanel() {
+function makePanel(clientUser) {
+  const avatarURL = clientUser?.displayAvatarURL?.({ size: 128 });
   const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('🎫 DESTEK MERKEZİ')
-    .setDescription([
-      'Yardım almak için aşağıdan talep konunu seç. Sana uygun bir form göstereceğiz ve özel bir destek kanalı açacağız.',
-      '',
-      '🔒 Ticket’ı yalnızca sen ve destek ekibi görebilir.',
-      '📎 Ekran görüntüsü veya dosyaları ticket açıldıktan sonra kanala gönderebilirsin.',
-      '⚠️ Şifre, token veya diğer gizli bilgilerini paylaşma.',
-    ].join('\n'))
-    .addFields({
-      name: 'Nasıl çalışır?',
-      value: 'Konunu seç → kısa formu doldur → özel kanalda ekiple görüş.',
+    .setColor(BRAND_COLOR)
+    .setAuthor({
+      name: 'REXAL SYSTEMS  •  DESTEK MERKEZİ',
+      ...(avatarURL ? { iconURL: avatarURL } : {}),
     })
-    .setFooter({ text: 'REXAL SYSTEMS • Destek Merkezi' })
+    .setTitle('Nasıl yardımcı olabiliriz?')
+    .setDescription([
+      'Doğru konuyu seç; sana uygun kısa form **hemen açılacak**. Gönderince özel destek kanalın hazır.',
+      '',
+      '### 1 · Konunu seç',
+      '### 2 · Formu doldur',
+      '### 3 · Ekiple özel kanalda konuş',
+    ].join('\n'))
+    .addFields(
+      ...Object.values(CATEGORIES).map(category => ({
+        name: `${category.emoji}  ${category.label}`,
+        value: category.description,
+        inline: true,
+      })),
+      {
+        name: '🔒 Güvenli ve kolay',
+        value: 'Ticket’ını yalnızca sen ve destek ekibi görür. Dosyalarını kanal açılınca ekleyebilirsin. **Şifre veya token paylaşma.**',
+        inline: false,
+      },
+    )
+    .setFooter({ text: 'REXAL SYSTEMS  •  Yardım için bir konu seçmen yeterli' })
     .setTimestamp();
 
   const menu = new StringSelectMenuBuilder()
     .setCustomId('ticket:category')
-    .setPlaceholder('Talep konusunu seç')
+    .setPlaceholder('👇 Buraya dokun ve talep konunu seç')
     .addOptions(Object.entries(CATEGORIES).map(([value, category]) => ({
       label: category.label,
       value,
@@ -261,6 +301,7 @@ function makeCategoryModal(categoryId) {
       .setStyle(field.style)
       .setRequired(field.required !== false)
       .setMaxLength(field.maxLength);
+    if (field.placeholder) input.setPlaceholder(field.placeholder);
     if (field.style === TextInputStyle.Short) input.setMinLength(2);
     modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
@@ -268,35 +309,41 @@ function makeCategoryModal(categoryId) {
 }
 
 function statusLabel(ticket) {
-  if (ticket.status === 'closed') return 'Kapalı';
-  if (ticket.status === 'waiting_user') return 'Kullanıcıdan yanıt bekleniyor';
-  if (ticket.assignedToId) return `Üstlenildi · <@${ticket.assignedToId}>`;
-  return 'Yetkili bekleniyor';
+  if (ticket.status === 'closed') return '🔒 Kapalı · Arşivde';
+  if (ticket.status === 'waiting_user') return '⏳ Senden yanıt bekleniyor';
+  if (ticket.assignedToId) return `🟢 Yetkili ilgileniyor · <@${ticket.assignedToId}>`;
+  return '🟡 Yetkili bekleniyor';
 }
 
-function makeTicketEmbed(ticket) {
+function makeTicketEmbed(ticket, clientUser) {
   const category = getCategory(ticket.categoryId);
+  const avatarURL = clientUser?.displayAvatarURL?.({ size: 128 });
   const embed = new EmbedBuilder()
-    .setColor(ticket.status === 'closed' ? 0x747f8d : 0x5865f2)
-    .setTitle(`${category?.emoji || '🎫'} Talep #${ticket.id} · ${category?.label || 'Destek'}`)
+    .setColor(ticket.status === 'closed' ? 0x596273 : (category?.color || BRAND_COLOR))
+    .setAuthor({
+      name: 'REXAL SYSTEMS  •  DESTEK MASASI',
+      ...(avatarURL ? { iconURL: avatarURL } : {}),
+    })
+    .setTitle(`${category?.emoji || '🎫'}  TALEP #${ticket.id}`)
     .setDescription(ticket.status === 'closed'
-      ? 'Bu talep kapatıldı. Tekrar yardıma ihtiyacın varsa yeniden açabilirsin.'
-      : 'Talebini burada ekiple paylaşabilirsin. Ek dosya ve ekran görüntüsü gönderebilirsin.')
+      ? 'Bu talep **kilitlendi ve arşivlendi**. Yeniden yardıma ihtiyacın varsa aşağıdaki düğmeden açabilirsin.'
+      : `**${category?.label || 'Destek'}**\nMesajını ve gerekiyorsa ekran görüntünü bu kanala gönder. Ekibimiz buradan yardımcı olacak.`)
     .addFields(
-      { name: 'Talebi açan', value: `<@${ticket.ownerId}>`, inline: true },
-      { name: 'Durum', value: statusLabel(ticket), inline: true },
-      { name: 'Açılış', value: `<t:${Math.floor(new Date(ticket.createdAt).getTime() / 1000)}:F>`, inline: false },
+      { name: '🧾 Talep numarası', value: `#${ticket.id}`, inline: true },
+      { name: '📍 Durum', value: statusLabel(ticket), inline: true },
+      { name: '👤 Talep sahibi', value: `<@${ticket.ownerId}>`, inline: true },
+      { name: '🧑‍💼 Sorumlu yetkili', value: ticket.assignedToId ? `<@${ticket.assignedToId}>` : 'Henüz atanmadı', inline: true },
+      { name: '🕒 Açılış zamanı', value: `<t:${Math.floor(new Date(ticket.createdAt).getTime() / 1000)}:F>`, inline: true },
     );
 
-  const details = Object.entries(ticket.form || {})
-    .filter(([, value]) => value)
-    .map(([label, value]) => `**${label}**\n${normalizeText(value, 800)}`)
-    .join('\n\n')
-    .slice(0, 3800);
-  if (details) embed.addFields({ name: 'Talep Detayları', value: details });
-  if (ticket.closeReason) embed.addFields({ name: 'Kapanış nedeni', value: normalizeText(ticket.closeReason, 900) });
-  if (ticket.rating) embed.addFields({ name: 'Kullanıcı değerlendirmesi', value: `${'⭐'.repeat(ticket.rating)} (${ticket.rating}/5)` });
-  return embed.setFooter({ text: 'REXAL SYSTEMS • Ticket Yönetimi' }).setTimestamp();
+  for (const [label, value] of Object.entries(ticket.form || {})) {
+    if (value) embed.addFields({ name: `📝 ${label}`, value: normalizeText(value, 1000) });
+  }
+  if (ticket.closeReason) embed.addFields({ name: '🔒 Kapanış nedeni', value: normalizeText(ticket.closeReason, 900) });
+  if (ticket.rating) embed.addFields({ name: '⭐ Değerlendirmen', value: `${'⭐'.repeat(ticket.rating)}  ${ticket.rating}/5` });
+  return embed
+    .setFooter({ text: `REXAL SYSTEMS  •  ${ticket.status === 'closed' ? 'Arşivlenmiş talep' : 'Destek ekibi burada yardımcı olacak'}` })
+    .setTimestamp();
 }
 
 function makeTicketComponents(ticket) {
@@ -323,10 +370,9 @@ function makeTicketComponents(ticket) {
   const controls = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`ticket:claim:${ticket.id}`)
-      .setLabel(ticket.assignedToId ? 'Üstlenildi' : 'Talebi Üstlen')
-      .setEmoji(ticket.assignedToId ? '✅' : '📌')
-      .setStyle(ticket.assignedToId ? ButtonStyle.Success : ButtonStyle.Primary)
-      .setDisabled(Boolean(ticket.assignedToId)),
+      .setLabel(ticket.assignedToId ? 'Görevi Bırak' : 'Talebi Üstlen')
+      .setEmoji(ticket.assignedToId ? '↩️' : '📌')
+      .setStyle(ticket.assignedToId ? ButtonStyle.Secondary : ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`ticket:waiting:${ticket.id}`)
       .setLabel(ticket.status === 'waiting_user' ? 'Yanıt Bekleniyor' : 'Yanıt Bekle')
@@ -410,17 +456,30 @@ async function createTicket(interaction, categoryId) {
       throw new Error(`Ticket kategorisi bulunamadı veya kategori kanalı değil: ${TICKET_CONFIG.categoryId}`);
     }
 
-    const openCount = Object.values(readStore().tickets).filter(ticket =>
+    const userTickets = Object.values(readStore().tickets).filter(ticket =>
       ticket.guildId === interaction.guildId
       && ticket.ownerId === interaction.user.id
-      && ACTIVE_STATUSES.has(ticket.status)
-    ).length;
+    );
+    const openCount = userTickets.filter(ticket => ACTIVE_STATUSES.has(ticket.status)).length;
     if (openCount >= TICKET_CONFIG.maxOpenTicketsPerUser) {
       const active = findActiveTicket(interaction.guildId, interaction.user.id);
       await interaction.editReply({
         content: active?.channelId
           ? `Zaten açık bir talebin var: <#${active.channelId}>`
-          : 'Zaten açık bir talebin var. Yeni talep açmadan önce mevcut talebini kapat.',
+          : `Aynı anda en fazla ${TICKET_CONFIG.maxOpenTicketsPerUser} açık ticket tutabilirsin. Yeni talep açmadan önce mevcut ticket’larından birini kapat.`,
+      });
+      return;
+    }
+
+    const cooldownMs = Number(TICKET_CONFIG.openCooldownMs) || 0;
+    const latestTicket = userTickets
+      .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))[0];
+    const cooldownEndsAt = latestTicket
+      ? new Date(latestTicket.createdAt).getTime() + cooldownMs
+      : 0;
+    if (cooldownMs > 0 && cooldownEndsAt > Date.now()) {
+      await interaction.editReply({
+        content: `⏳ Yeni ticket açmadan önce biraz bekle. Tekrar deneyebilirsin <t:${Math.ceil(cooldownEndsAt / 1000)}:R>.`,
       });
       return;
     }
@@ -433,7 +492,7 @@ async function createTicket(interaction, categoryId) {
       type: ChannelType.GuildText,
       parent: categoryChannel.id,
       topic: `ticket:${id};owner:${interaction.user.id};type:${categoryId}`,
-      permissionOverwrites: supportOverwrites(interaction.guild, interaction.user.id),
+      permissionOverwrites: supportOverwrites(interaction.guild, interaction.user.id, true, false, categoryId),
       reason: `Ticket #${id} açıldı (${category.label})`,
     });
 
@@ -462,7 +521,7 @@ async function createTicket(interaction, categoryId) {
 
     const ticketMessage = await createdChannel.send({
       content: `<@${interaction.user.id}>`,
-      embeds: [makeTicketEmbed(ticket)],
+      embeds: [makeTicketEmbed(ticket, interaction.client.user)],
       components: makeTicketComponents(ticket),
       allowedMentions: { users: [interaction.user.id] },
     });
@@ -473,7 +532,6 @@ async function createTicket(interaction, categoryId) {
     writeStore(store);
     saved = true;
     await interaction.editReply({ content: `✅ Talebin açıldı: ${createdChannel}` });
-    await auditTicket(interaction.guild, ticket, 'Talep açıldı', interaction.user.id);
   } catch (error) {
     if (createdChannel && !saved) {
       await createdChannel.delete('Ticket oluşturulurken hata oluştu').catch(deleteError => {
@@ -500,7 +558,7 @@ async function refreshTicket(interaction, ticket) {
   if (!channel || !ticket.messageId) throw new Error(`Ticket #${ticket.id} panel mesajı bulunamadı.`);
   const message = await channel.messages.fetch(ticket.messageId);
   await message.edit({
-    embeds: [makeTicketEmbed(ticket)],
+    embeds: [makeTicketEmbed(ticket, interaction.client.user)],
     components: makeTicketComponents(ticket),
     allowedMentions: { parse: [] },
   });
@@ -512,25 +570,50 @@ async function writeTicket(ticket) {
   writeStore(store);
 }
 
-async function postLog(guild, content, files = []) {
+async function setTicketWriteAccess(channel, ticket, allowMembers, allowSupport, reason) {
+  const memberIds = [...new Set([ticket.ownerId, TICKET_CONFIG.ownerId, ...(ticket.memberIds || [])])];
+  for (const memberId of memberIds) {
+    await channel.permissionOverwrites.edit(memberId, {
+      SendMessages: allowMembers,
+      AttachFiles: allowMembers,
+    }, { type: OverwriteType.Member, reason });
+  }
+  for (const roleId of getSupportRoleIds(ticket.categoryId)) {
+    await channel.permissionOverwrites.edit(roleId, {
+      SendMessages: allowSupport,
+      AttachFiles: allowSupport,
+    }, { type: OverwriteType.Role, reason });
+  }
+}
+
+async function syncTicketSupportRoles(channel, ticket, fromCategoryId, toCategoryId) {
+  const previousRoles = getSupportRoleIds(fromCategoryId);
+  const nextRoles = getSupportRoleIds(toCategoryId);
+  for (const roleId of previousRoles.filter(id => !nextRoles.includes(id))) {
+    await channel.permissionOverwrites.delete(roleId, `Ticket #${ticket.id} konu yönlendirmesi güncellendi`);
+  }
+  for (const roleId of nextRoles) {
+    await channel.permissionOverwrites.edit(roleId, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true,
+      AttachFiles: true,
+      EmbedLinks: true,
+    }, {
+      type: OverwriteType.Role,
+      reason: `Ticket #${ticket.id} konu yönlendirmesi güncellendi`,
+    });
+  }
+}
+
+async function postLog(guild, payload) {
   if (!TICKET_CONFIG.logChannelId) return false;
   const channel = await guild.channels.fetch(TICKET_CONFIG.logChannelId);
   if (!channel || !channel.isTextBased() || !channel.send) {
     throw new Error(`Ticket kayıt kanalı bulunamadı veya mesaj gönderilemiyor: ${TICKET_CONFIG.logChannelId}`);
   }
-  await channel.send({ content, files, allowedMentions: { parse: [] } });
+  await channel.send({ ...payload, allowedMentions: { parse: [] } });
   return true;
-}
-
-async function auditTicket(guild, ticket, action, actorId) {
-  try {
-    await postLog(
-      guild,
-      `🎫 Ticket #${ticket.id} · ${action}\nTalep: <#${ticket.channelId}> · Kullanıcı: <@${ticket.ownerId}> · İşlemi yapan: <@${actorId}>`,
-    );
-  } catch (error) {
-    console.error(`[Ticket] #${ticket.id} işlem kaydı gönderilemedi (${action}):`, error);
-  }
 }
 
 function escapeHtml(value) {
@@ -573,13 +656,29 @@ async function createTranscript(channel, ticket) {
   return Buffer.from(html, 'utf8');
 }
 
-async function deliverTranscript(guild, channel, ticket) {
+async function deliverTranscript(guild, channel, ticket, closeInfo = null) {
   const buffer = await createTranscript(channel, ticket);
   const file = new AttachmentBuilder(buffer, { name: `ticket-${ticket.id}.html` });
-  const message = `📄 Ticket #${ticket.id} konuşma dökümü · <#${ticket.channelId}>`;
-  const deliveredToLog = await postLog(guild, message, [file]);
+  const embed = new EmbedBuilder()
+    .setColor(closeInfo ? 0x596273 : BRAND_COLOR)
+    .setTitle(closeInfo ? `🔒 Ticket #${ticket.id} kapatıldı ve arşivlendi` : `📄 Ticket #${ticket.id} konuşma dökümü`)
+    .setDescription(`**Talep:** <#${ticket.channelId}>\n**Talep sahibi:** <@${ticket.ownerId}>\n**Konu:** ${getCategory(ticket.categoryId)?.label || 'Destek'}`)
+    .addFields(
+      { name: '🧑‍💼 İşlemi yapan', value: closeInfo ? `<@${closeInfo.actorId}>` : 'Manuel transcript talebi', inline: true },
+      { name: '🕒 Açılış', value: `<t:${Math.floor(new Date(ticket.createdAt).getTime() / 1000)}:F>`, inline: true },
+      { name: '📦 Kayıt', value: `Son ${TRANSCRIPT_LIMIT} mesaj HTML transcript dosyası olarak eklendi.`, inline: false },
+    )
+    .setTimestamp();
+  if (closeInfo) embed.addFields({ name: '🔒 Kapanış nedeni', value: normalizeText(closeInfo.reason, 900) });
+
+  const payload = {
+    embeds: [embed],
+    files: [file],
+    allowedMentions: { parse: [] },
+  };
+  const deliveredToLog = await postLog(guild, payload);
   if (!deliveredToLog) {
-    await channel.send({ content: message, files: [file], allowedMentions: { parse: [] } });
+    await channel.send(payload);
   }
 }
 
@@ -653,7 +752,7 @@ async function handleUserAction(interaction, ticketId, action) {
   }
 
   if (action === 'assign_submit') {
-    if (!isStaff(member.id, member)) {
+    if (!isTicketStaff(member.id, member, ticket.categoryId)) {
       await interaction.editReply({ content: '❌ Bu kullanıcı destek yetkilisi olarak yapılandırılmamış.' });
       return;
     }
@@ -662,7 +761,6 @@ async function handleUserAction(interaction, ticketId, action) {
     ticket.claimedAt = new Date().toISOString();
     await writeTicket(ticket);
     await refreshTicket(interaction, ticket);
-    await auditTicket(interaction.guild, ticket, `Yetkiliye devredildi: ${member.user.tag}`, interaction.user.id);
     await interaction.editReply({ content: `✅ Ticket ${member} kullanıcısına devredildi.` });
     return;
   }
@@ -675,21 +773,19 @@ async function handleUserAction(interaction, ticketId, action) {
     await interaction.channel.permissionOverwrites.delete(member.id, `Ticket #${ticket.id} üyesi çıkarıldı`);
     ticket.memberIds = ticket.memberIds.filter(id => id !== member.id);
     await writeTicket(ticket);
-    await auditTicket(interaction.guild, ticket, `Üye çıkarıldı: ${member.user.tag}`, interaction.user.id);
     await interaction.editReply({ content: `✅ ${member} ticket’tan çıkarıldı.` });
     return;
   }
 
   await interaction.channel.permissionOverwrites.edit(member.id, {
     ViewChannel: true,
-    SendMessages: true,
+    SendMessages: !ticket.locked,
     ReadMessageHistory: true,
-    AttachFiles: true,
+    AttachFiles: !ticket.locked,
     EmbedLinks: true,
   }, { type: OverwriteType.Member, reason: `Ticket #${ticket.id} için yetkili tarafından eklendi` });
   ticket.memberIds = [...new Set([...(ticket.memberIds || []), member.id])];
   await writeTicket(ticket);
-  await auditTicket(interaction.guild, ticket, `Üye eklendi: ${member.user.tag}`, interaction.user.id);
   await interaction.editReply({ content: `✅ ${member} ticket’a eklendi.` });
 }
 
@@ -712,12 +808,11 @@ async function createVoiceSupport(interaction, ticket) {
     name: `ses-ticket-${ticket.id}`,
     type: ChannelType.GuildVoice,
     parent: TICKET_CONFIG.categoryId,
-    permissionOverwrites: supportOverwrites(interaction.guild, ticket.ownerId, true, true),
+    permissionOverwrites: supportOverwrites(interaction.guild, ticket.ownerId, true, true, ticket.categoryId),
     reason: `Ticket #${ticket.id} için sesli destek`,
   });
   ticket.voiceChannelId = voice.id;
   await writeTicket(ticket);
-  await auditTicket(interaction.guild, ticket, 'Özel sesli destek açıldı', interaction.user.id);
   await interaction.editReply({ content: `🔊 Özel sesli destek kanalı açıldı: ${voice}` });
 }
 
@@ -784,21 +879,6 @@ async function handleActionSelect(interaction, ticketId) {
 async function handleButton(interaction, parts) {
   const [action, ticketId, extra] = parts;
 
-  if (action === 'form') {
-    const category = getCategory(ticketId);
-    if (!category) {
-      await interaction.reply({ content: '❌ Bu ticket kategorisi kullanılamıyor.', ephemeral: true });
-      return;
-    }
-    await interaction.showModal(makeCategoryModal(ticketId));
-    return;
-  }
-
-  if (action === 'cancel_form') {
-    await interaction.update({ content: 'Talep açma işlemi iptal edildi.', embeds: [], components: [] });
-    return;
-  }
-
   const ticket = await fetchTicketChannel(interaction, ticketId);
   if (!ticket) return;
 
@@ -811,7 +891,10 @@ async function handleButton(interaction, parts) {
     ticket.rating = rating;
     ticket.ratedAt = new Date().toISOString();
     await writeTicket(ticket);
-    await interaction.update({ embeds: [makeTicketEmbed(ticket)], components: makeTicketComponents(ticket) });
+    await interaction.update({
+      embeds: [makeTicketEmbed(ticket, interaction.client.user)],
+      components: makeTicketComponents(ticket),
+    });
     return;
   }
 
@@ -825,13 +908,28 @@ async function handleButton(interaction, parts) {
       return;
     }
     await interaction.deferReply({ ephemeral: true });
-    await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
-      ViewChannel: true,
-      SendMessages: true,
-      ReadMessageHistory: true,
-      AttachFiles: true,
-      EmbedLinks: true,
-    }, { type: OverwriteType.Member, reason: `Ticket #${ticket.id} yeniden açıldı` });
+    try {
+      await setTicketWriteAccess(
+        interaction.channel,
+        ticket,
+        true,
+        true,
+        `Ticket #${ticket.id} yeniden açıldı`,
+      );
+    } catch (error) {
+      try {
+        await setTicketWriteAccess(
+          interaction.channel,
+          ticket,
+          false,
+          false,
+          `Ticket #${ticket.id} yeniden açma işlemi geri alındı`,
+        );
+      } catch (rollbackError) {
+        console.error(`[Ticket] #${ticket.id} yeniden açma izinleri geri alınamadı:`, rollbackError);
+      }
+      throw error;
+    }
     ticket.status = 'open';
     ticket.locked = false;
     ticket.assignedToId = null;
@@ -844,7 +942,6 @@ async function handleButton(interaction, parts) {
     ticket.lastUserReminderAt = null;
     await writeTicket(ticket);
     await refreshTicket(interaction, ticket);
-    await auditTicket(interaction.guild, ticket, 'Talep yeniden açıldı', interaction.user.id);
     await interaction.editReply({ content: `✅ Ticket #${ticket.id} yeniden açıldı.` });
     return;
   }
@@ -864,7 +961,7 @@ async function handleButton(interaction, parts) {
     return;
   }
 
-  if (action === 'claim' && ticket.assignedToId) {
+  if (action === 'claim' && ticket.assignedToId && ticket.assignedToId !== interaction.user.id) {
     await interaction.reply({ content: `Bu talep zaten <@${ticket.assignedToId}> tarafından üstlenilmiş.`, ephemeral: true });
     return;
   }
@@ -875,33 +972,49 @@ async function handleButton(interaction, parts) {
 
   await interaction.deferUpdate();
   if (action === 'claim') {
-    ticket.assignedToId = interaction.user.id;
-    ticket.status = 'claimed';
-    ticket.claimedAt = new Date().toISOString();
+    if (ticket.assignedToId === interaction.user.id) {
+      ticket.assignedToId = null;
+      ticket.status = 'open';
+      ticket.claimedAt = null;
+    } else {
+      ticket.assignedToId = interaction.user.id;
+      ticket.status = 'claimed';
+      ticket.claimedAt = new Date().toISOString();
+    }
   } else if (action === 'waiting') {
     ticket.status = ticket.status === 'waiting_user' ? (ticket.assignedToId ? 'claimed' : 'open') : 'waiting_user';
   } else {
     const shouldLock = !ticket.locked;
-    await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
-      SendMessages: !shouldLock,
-      AttachFiles: !shouldLock,
-    }, {
-      type: OverwriteType.Member,
-      reason: shouldLock ? `Ticket #${ticket.id} kilitlendi` : `Ticket #${ticket.id} kilidi açıldı`,
-    });
+    try {
+      await setTicketWriteAccess(
+        interaction.channel,
+        ticket,
+        !shouldLock,
+        true,
+        shouldLock ? `Ticket #${ticket.id} kilitlendi` : `Ticket #${ticket.id} kilidi açıldı`,
+      );
+    } catch (error) {
+      try {
+        await setTicketWriteAccess(
+          interaction.channel,
+          ticket,
+          !ticket.locked,
+          true,
+          `Ticket #${ticket.id} kilitleme işlemi geri alındı`,
+        );
+      } catch (rollbackError) {
+        console.error(`[Ticket] #${ticket.id} kilit izinleri geri alınamadı:`, rollbackError);
+      }
+      throw error;
+    }
     ticket.locked = shouldLock;
   }
 
   await writeTicket(ticket);
   await refreshTicket(interaction, ticket);
-  await auditTicket(interaction.guild, ticket, action === 'claim'
-    ? 'Talep üstlenildi'
-    : action === 'waiting'
-      ? `Durum değiştirildi: ${statusLabel(ticket)}`
-      : (ticket.locked ? 'Talep kilitlendi' : 'Talep kilidi açıldı'), interaction.user.id);
   await interaction.followUp({
     content: action === 'claim'
-      ? `✅ Ticket #${ticket.id} üstlenildi.`
+      ? `✅ ${ticket.assignedToId ? `Ticket #${ticket.id} sana atandı.` : `Ticket #${ticket.id} atamasından çıktın.`}`
       : action === 'waiting'
         ? `✅ Ticket durumu: ${statusLabel(ticket)}.`
         : `✅ Ticket ${ticket.locked ? 'kilitlendi' : 'kilidi açıldı'}.`,
@@ -923,13 +1036,57 @@ async function handleCloseSubmit(interaction, ticketId) {
     await interaction.editReply({ content: 'Bu ticket zaten kapalı.' });
     return;
   }
+  if (reason.length < 3) {
+    await interaction.editReply({ content: 'Kapanış nedeni en az 3 karakter olmalı.' });
+    return;
+  }
 
-  await deliverTranscript(interaction.guild, interaction.channel, ticket);
   const oldLocked = ticket.locked;
-  await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
-    SendMessages: false,
-    AttachFiles: false,
-  }, { type: OverwriteType.Member, reason: `Ticket #${ticket.id} kapatıldı` });
+  const previous = {
+    status: ticket.status,
+    locked: ticket.locked,
+    closeReason: ticket.closeReason,
+    closedAt: ticket.closedAt,
+  };
+  let permissionsChanged = false;
+  let saved = false;
+  const rollback = async () => {
+    Object.assign(ticket, previous);
+    if (saved) await writeTicket(ticket);
+    if (permissionsChanged) {
+      await setTicketWriteAccess(
+        interaction.channel,
+        ticket,
+        !oldLocked,
+        true,
+        `Ticket #${ticket.id} kapanışı geri alındı`,
+      );
+    }
+  };
+
+  try {
+    await setTicketWriteAccess(
+      interaction.channel,
+      ticket,
+      false,
+      false,
+      `Ticket #${ticket.id} kapatıldı ve arşivlendi`,
+    );
+    permissionsChanged = true;
+  } catch (error) {
+    try {
+      await setTicketWriteAccess(
+        interaction.channel,
+        ticket,
+        !oldLocked,
+        true,
+        `Ticket #${ticket.id} kapanış izni geri alındı`,
+      );
+    } catch (rollbackError) {
+      console.error(`[Ticket] #${ticket.id} kapanış izinleri geri alınamadı:`, rollbackError);
+    }
+    throw error;
+  }
 
   ticket.status = 'closed';
   ticket.locked = true;
@@ -937,14 +1094,17 @@ async function handleCloseSubmit(interaction, ticketId) {
   ticket.closedAt = new Date().toISOString();
   try {
     await writeTicket(ticket);
-  } catch (error) {
-    await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
-      SendMessages: !oldLocked,
-      AttachFiles: !oldLocked,
-    }, {
-      type: OverwriteType.Member,
-      reason: `Ticket #${ticket.id} kapanış kaydı başarısız oldu; önceki izinler geri yüklendi`,
+    saved = true;
+    await deliverTranscript(interaction.guild, interaction.channel, ticket, {
+      actorId: interaction.user.id,
+      reason,
     });
+  } catch (error) {
+    try {
+      await rollback();
+    } catch (rollbackError) {
+      console.error(`[Ticket] #${ticket.id} kapanış hatası sonrası geri alma başarısız:`, rollbackError);
+    }
     throw error;
   }
 
@@ -973,8 +1133,11 @@ async function handleCloseSubmit(interaction, ticketId) {
   }
 
   await refreshTicket(interaction, ticket);
-  await auditTicket(interaction.guild, ticket, `Kapatıldı: ${normalizeText(reason, 500)}`, interaction.user.id);
-  await interaction.editReply({ content: `✅ Ticket #${ticket.id} kapatıldı. Konuşma dökümü kaydedildi.` });
+  await interaction.editReply({
+    content: TICKET_CONFIG.logChannelId
+      ? `✅ Ticket #${ticket.id} kapatıldı ve arşivlendi. Konuşma dökümü kayıt kanalına eklendi.`
+      : `✅ Ticket #${ticket.id} kapatıldı ve arşivlendi. Konuşma dökümü bu kanalda saklandı.`,
+  });
 }
 
 function ticketStats(guildId) {
@@ -997,8 +1160,8 @@ function ticketStats(guildId) {
     .join('\n');
 
   return new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('📊 Ticket İstatistikleri')
+    .setColor(BRAND_COLOR)
+    .setTitle('📊 DESTEK MERKEZİ  ·  İSTATİSTİKLER')
     .addFields(
       { name: 'Toplam', value: String(tickets.length), inline: true },
       { name: 'Açık', value: String(open), inline: true },
@@ -1047,7 +1210,7 @@ async function handleTicketMessage(message) {
   await writeTicket(ticket);
   await message.channel.messages.fetch(ticket.messageId).then(panelMessage =>
     panelMessage.edit({
-      embeds: [makeTicketEmbed(ticket)],
+      embeds: [makeTicketEmbed(ticket, message.client.user)],
       components: makeTicketComponents(ticket),
       allowedMentions: { parse: [] },
     })
@@ -1082,7 +1245,7 @@ async function runTicketReminders(client) {
         ticket.lastUserReminderAt = new Date(now).toISOString();
         await writeTicket(ticket);
       } else if (ticket.status !== 'waiting_user' && elapsed >= TICKET_CONFIG.staffReminderMs) {
-        const supportRoleIds = getSupportRoleIds();
+        const supportRoleIds = getSupportRoleIds(ticket.categoryId);
         const recipients = supportRoleIds.length
           ? supportRoleIds.map(roleId => `<@&${roleId}>`).join(' ')
           : `<@${TICKET_CONFIG.ownerId}>`;
@@ -1127,7 +1290,37 @@ export default {
     if (!category || category.type !== ChannelType.GuildCategory) {
       throw new Error(`Ticket kategorisi bulunamadı veya kategori kanalı değil: ${TICKET_CONFIG.categoryId}`);
     }
-    await message.reply(makePanel());
+
+    const panelRef = readStore().panels[message.channelId];
+    if (panelRef?.guildId === message.guildId && panelRef.messageId) {
+      try {
+        const panelMessage = await message.channel.messages.fetch(panelRef.messageId);
+        await panelMessage.edit(makePanel(message.client.user));
+        await message.reply('✅ Bu kanaldaki destek paneli yenilendi.');
+        return;
+      } catch (error) {
+        if (error.code !== 10008) throw error;
+        const store = readStore();
+        delete store.panels[message.channelId];
+        writeStore(store);
+      }
+    }
+
+    const panelMessage = await message.channel.send(makePanel(message.client.user));
+    const store = readStore();
+    store.panels[message.channelId] = {
+      guildId: message.guildId,
+      messageId: panelMessage.id,
+    };
+    try {
+      writeStore(store);
+    } catch (error) {
+      await panelMessage.delete('Ticket panel kaydı kaydedilemedi').catch(deleteError => {
+        console.error(`[Ticket] Panel kaydı başarısız; mesaj silinemedi (${panelMessage.id}):`, deleteError);
+      });
+      throw error;
+    }
+    await message.reply('✅ Destek paneli hazır. Üyeler konu seçerek ticket açabilir.');
   },
 
   async onButton(interaction, parts) {
@@ -1144,26 +1337,7 @@ export default {
         return;
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setTitle(`${category.emoji} ${category.label}`)
-        .setDescription([
-          category.checklist,
-          '',
-          'Devam ettiğinde kısa bir form dolduracaksın. Gizli bilgilerini forma yazma.',
-        ].join('\n'));
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`ticket:form:${categoryId}`)
-          .setLabel('Talep Formunu Aç')
-          .setEmoji('📝')
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId('ticket:cancel_form')
-          .setLabel('Vazgeç')
-          .setStyle(ButtonStyle.Secondary),
-      );
-      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      await interaction.showModal(makeCategoryModal(categoryId));
       return;
     }
 
@@ -1191,15 +1365,45 @@ export default {
       }
 
       await interaction.deferUpdate();
-      await interaction.channel.setName(`ticket-${ticket.id}-${slugify(categoryId)}`);
-      await interaction.channel.setTopic(`ticket:${ticket.id};owner:${ticket.ownerId};type:${categoryId}`);
-      ticket.categoryId = categoryId;
-      ticket.lastActivityAt = new Date().toISOString();
-      ticket.lastStaffReminderAt = null;
-      ticket.lastUserReminderAt = null;
-      await writeTicket(ticket);
+      const previousCategoryId = ticket.categoryId;
+      const previousChannelName = interaction.channel.name;
+      const previousTopic = interaction.channel.topic;
+      const previousTicketState = {
+        categoryId: ticket.categoryId,
+        status: ticket.status,
+        assignedToId: ticket.assignedToId,
+        claimedAt: ticket.claimedAt,
+        lastActivityAt: ticket.lastActivityAt,
+        lastStaffReminderAt: ticket.lastStaffReminderAt,
+        lastUserReminderAt: ticket.lastUserReminderAt,
+      };
+      try {
+        await syncTicketSupportRoles(interaction.channel, ticket, previousCategoryId, categoryId);
+        await interaction.channel.setName(`ticket-${ticket.id}-${slugify(categoryId)}`);
+        await interaction.channel.setTopic(`ticket:${ticket.id};owner:${ticket.ownerId};type:${categoryId}`);
+        ticket.categoryId = categoryId;
+        if (ticket.assignedToId) {
+          ticket.assignedToId = null;
+          ticket.claimedAt = null;
+          ticket.status = 'open';
+        }
+        ticket.lastActivityAt = new Date().toISOString();
+        ticket.lastStaffReminderAt = null;
+        ticket.lastUserReminderAt = null;
+        await writeTicket(ticket);
+      } catch (error) {
+        Object.assign(ticket, previousTicketState);
+        try {
+          await interaction.channel.setName(previousChannelName);
+          await interaction.channel.setTopic(previousTopic);
+          await syncTicketSupportRoles(interaction.channel, ticket, categoryId, previousCategoryId);
+          await writeTicket(ticket);
+        } catch (rollbackError) {
+          console.error(`[Ticket] #${ticket.id} konu değişikliği geri alınamadı:`, rollbackError);
+        }
+        throw error;
+      }
       await refreshTicket(interaction, ticket);
-      await auditTicket(interaction.guild, ticket, `Talep konusu değiştirildi: ${category.label}`, interaction.user.id);
       await interaction.editReply({ content: `✅ Ticket #${ticket.id} konusu **${category.label}** olarak değiştirildi.`, components: [] });
       return;
     }
