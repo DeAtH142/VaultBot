@@ -13,20 +13,40 @@ const coverProxyCache = new Map();
 
 async function resolveCoverAsset(client, imageUrl) {
   // ⚠️ Discord external asset API: URL en fazla 256 karakter olabilir.
-  // NEXARDA'nın bazı CDN linkleri bunu aşıyor → uzun URL'leri atla, düz isimle devam et.
+  // Uzun NEXARDA linkleri query temizleme + wsrv.nl proxy ile kısaltılır.
+
+  // 0️⃣ Temel doğrulama
   if (!imageUrl || typeof imageUrl !== 'string') return undefined;
-  if (imageUrl.length > 256) {
-    console.warn(`🎮 [OyunPresence] Kapak URL'si çok uzun (${imageUrl.length} karakter) — resim olmadan devam ediliyor.`);
-    return undefined;
-  }
   if (!/^https?:\/\//i.test(imageUrl)) return undefined;
-  if (coverProxyCache.has(imageUrl)) return coverProxyCache.get(imageUrl);
+
+  // 1️⃣ Query parametrelerini temizle (NEXARDA linkleri genelde bunlarla uzuyor)
+  let url = imageUrl;
   try {
-    const ext = await RichPresence.getExternal(client, SPOTIFY_APP_ID, imageUrl);
+    const u = new URL(url);
+    if (u.search) {
+      const cleaned = u.origin + u.pathname;
+      if (cleaned.length <= 256) url = cleaned;
+    }
+  } catch { return undefined; }
+
+  // 2️⃣ Hâlâ uzunsa wsrv.nl ücretsiz görsel proxy'den geçir → kısa URL
+  if (url.length > 256) {
+    const proxied = `https://wsrv.nl/?url=${encodeURIComponent(url)}&w=512`;
+    if (proxied.length <= 256) {
+      url = proxied;
+    } else {
+      console.warn(`🎮 [OyunPresence] Kapak URL'si kısaltılamadı (${imageUrl.length} karakter) — resim olmadan devam ediliyor.`);
+      return undefined;
+    }
+  }
+
+  if (coverProxyCache.has(url)) return coverProxyCache.get(url);
+  try {
+    const ext = await RichPresence.getExternal(client, SPOTIFY_APP_ID, url);
     const hash = ext?.[0]?.external_asset_path;
     if (!hash) return undefined;
     const asset = `mp:${hash}`;
-    coverProxyCache.set(imageUrl, asset);
+    coverProxyCache.set(url, asset);
     return asset;
   } catch (err) {
     console.error('🎮 [OyunPresence] Kapak resmi proxy hatası:', err.message);
