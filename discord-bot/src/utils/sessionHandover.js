@@ -35,16 +35,11 @@ function enabled() {
   return !!process.env.FIREBASE_SERVICE_ACCOUNT;
 }
 
-function getServiceAccount() {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-  return JSON.parse(raw.trim().startsWith('{') ? raw : Buffer.from(raw, 'base64').toString('utf8'));
-}
-
 async function getDb() {
   if (db) return db;
   const admin = (await import('firebase-admin')).default;
   if (!admin.apps.length) {
-    admin.initializeApp({ credential: admin.credential.cert(getServiceAccount()) });
+    admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
   }
   db = admin.firestore();
   return db;
@@ -98,7 +93,7 @@ export async function markSessionReady() {
       const hb = Date.parse(data.lastHeartbeat || '') || 0;
       if (now - hb > STALE_MS) {
         // Ölü oturum — dokümanı temizle
-        await doc.ref.update({ status: 'stale-cleanup', lastHeartbeat: new Date().toISOString() }).catch(() => {});
+        await doc.ref.update({ status: 'stale-cleanup', lastHeartbeat: new Date().toISOString() }).catch(() => { });
         continue;
       }
       console.log(`[Handover] 🔁 Önceki oturum ${doc.id} bulundu — draining komutu gönderiliyor.`);
