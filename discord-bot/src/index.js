@@ -92,7 +92,7 @@ console.log(`📦 ${client.commands.size} komut yüklendi.`);
 
 // ── customId yönlendirmesi ──────────────────────────────────────────────────
 const CUSTOM_ID_ROUTES = {
-  vault: 'hesaplarim', oyun: 'oyun', aktif: 'online', tokensil: 'tokensil', owo: 'owo', autotyper: 'autotyper',
+  vault: 'hesaplarim', oyun: 'oyun', incele: 'incele', aktif: 'online', tokensil: 'tokensil', owo: 'owo', autotyper: 'autotyper',
   voiceafk: 'voiceafk', otoreact: 'otoreact', autoleave: 'autoleave', joiner: 'joiner',
   profilechanger: 'profilechanger', friendcleaner: 'friendcleaner', checker: 'checker',
   otomesaj: 'otomesaj', dmsender: 'dmsender', giveawayfarmer: 'giveawayfarmer',
