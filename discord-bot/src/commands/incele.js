@@ -9,7 +9,7 @@ export default {
   aliases: ['analiz', 'ai-analiz'],
 
   async execute(message) {
-    // Sadece yöneticiler kullanabilsin (isteğe bağlı, istersen kaldırabilirsin)
+    // Sadece yöneticiler kullanabilsin
     if (!message.member.permissions.has('ManageGuild')) {
       return message.reply('❌ Bu komutu sadece **Sunucuyu Yönet** yetkisi olanlar kullanabilir.');
     }
@@ -24,7 +24,7 @@ export default {
       const channelCount = guild.channels.cache.size;
       const roleCount = guild.roles.cache.size;
 
-      // 2. Son 20 Mesajı Çek (Sohbetin sıcaklığını anlamak için)
+      // 2. Son 20 Mesajı Çek
       const fetchedMessages = await message.channel.messages.fetch({ limit: 20 });
       const chatContext = fetchedMessages
         .reverse()
@@ -65,7 +65,7 @@ Bu verilere dayanarak:
           `**🤖 Yapay Zeka Raporu:**`,
           aiResponse.slice(0, 3900), // Discord limitine takılmamak için
         ].join('\n'))
-        .setFooter({ text: BRAND.footer('Powered by Cloudflare AI') })
+        .setFooter(BRAND.footer('Powered by Cloudflare AI')) // 🚨 DÜZELTİLDİ: Süslü parantezler kaldırıldı!
         .setTimestamp();
 
       await message.reply({ embeds: [embed] });
