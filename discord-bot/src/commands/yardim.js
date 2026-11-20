@@ -82,6 +82,15 @@ const SECTIONS = [
     ],
   },
   {
+    title: '🎫 Destek Sistemi',
+    emoji: '🎫',
+    desc: 'Özel destek talepleri oluştur ve yönet.',
+    lines: [
+      ['`!ticket`', '`!destek`', 'Yetkili olduğun kanala destek paneli gönderir.'],
+      ['`!ticket stats`', '`!ticket istatistik`', 'Ticket sayısı, kategori dağılımı, ilk yanıt süresi ve puan ortalamasını gösterir.'],
+    ],
+  },
+  {
     title: 'ℹ️ Genel Komutlar',
     emoji: 'ℹ️',
     desc: 'Yardım ve sistem bilgisi.',

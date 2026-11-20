@@ -121,6 +121,7 @@ client.once('ready', () => {
 
   startPeriodicPush();
   startSubscriptionChecker(client);
+  client.commands.get('ticket')?.startMaintenance?.(client);
 
   // 🔄 Blue-green handover: hazırız — eski oturuma draining komutu gönder
   markSessionReady().catch(console.error);

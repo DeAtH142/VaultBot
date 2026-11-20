@@ -101,3 +101,16 @@ export const SELFBOT_USERS = [
 export function canUseSelfbot(userId) {
   return SELFBOT_USERS.includes(userId);
 }
+
+export const TICKET_CONFIG = Object.freeze({
+  ownerId: '1160564359727173792',
+  categoryId: '1573294586108051486',
+  // Add support role IDs here; with an empty list, only the owner manages tickets.
+  supportRoleIds: [1571141326517313536],
+  // When empty, transcripts are posted inside the private ticket channel.
+  logChannelId: '1573301034670100490',
+  maxOpenTicketsPerUser: 2,
+  // Inactivity reminders; tickets are never auto-deleted.
+  staffReminderMs: 24 * 60 * 60 * 1000,
+  userResponseReminderMs: 72 * 60 * 60 * 1000,
+});
