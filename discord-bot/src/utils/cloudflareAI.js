@@ -8,8 +8,9 @@ export async function askCloudflareAI(systemPrompt, userPrompt) {
   }
 
   try {
+    // 🚨 MODEL GÜNCELLENDİ: Cloudflare'in güncel desteklediği model (llama-3.1)
     const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3-8b-instruct`,
+      `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.1-8b-instruct`,
       {
         method: 'POST',
         headers: {
@@ -32,7 +33,7 @@ export async function askCloudflareAI(systemPrompt, userPrompt) {
     }
 
     const data = await response.json();
-    return data.result.response; // AI'dan gelen cevap
+    return data.result.response; 
     
   } catch (err) {
     console.error('☁️ [Cloudflare AI] Hata:', err.message);
