@@ -7,6 +7,7 @@ const runningSessions = new Map();
 const WATCHDOG_MS = 60_000;
 let watchdogTimer = null;
 
+const APP_ID = '1525831686011490334'; // kendi bot uygulaması — external asset yüklemeleri bunun altında
 const SPOTIFY_APP_ID = '1336326530712000543';
 const coverProxyCache = new Map();
 
@@ -120,34 +121,48 @@ export async function searchGame(query) {
 async function buildPresenceState(state) {
   const { gameData } = state;
   
-  // 🚨 ŞİMDİLİK KAPATTIK: Resim yüzünden profil çökmemesi için assets'i devre dışı bıraktık.
-  // const coverAsset = await resolveCoverAsset(state.client, gameData.imageUrl);
+  // 🖼 Kapak resmi: Discord'un FREE external asset API'si ile proxy'lenir
+  // (NEXARDA/Steam'den gelen gerçek oyun logosu — attığın GTA VI görseli gibi)
+  let coverAsset;
+  if (gameData.imageUrl) {
+    coverAsset = await resolveCoverAsset(state.client, gameData.imageUrl);
+  }
 
-  return {
+  const payload = {
     name: gameData.gameName.slice(0, 128),
     type: 0, // 0 = OYNUYOR
     details: gameData.details ? gameData.details.slice(0, 128) : undefined,
     state: gameData.playerState ? gameData.playerState.slice(0, 128) : undefined,
-    timestamps: { 
-      start: state.startedAt 
+    timestamps: {
+      start: state.startedAt
     },
-    
-    // 🚨 KRİTİK: BURAYA KENDİ BOTUNUN ID'SİNİ YAZMALISIN!
-    // Discord'da botuna sağ tıkla -> Uygulama ID'sini Kopyala -> Buraya yapıştır.
-    application_id: '1525831686011490334', 
-    
-    // Resimler test bittikten sonra açılacak:
-    // assets: {
-    //   ...(coverAsset ? { large_image: coverAsset } : {}),
-    //   ...(coverAsset ? { large_text: gameData.gameName.slice(0, 128) } : {}),
-    // },
   };
+
+  if (coverAsset) {
+    // Kapak bulundu → görselli zengin presence
+    payload.application_id = APP_ID;
+    payload.assets = {
+      large_image: coverAsset,
+      large_text: gameData.gameName.slice(0, 128),
+    };
+  } else if (gameData.assetKey) {
+    // Yedek: elle yüklenmiş asset key
+    payload.application_id = APP_ID;
+    payload.assets = {
+      large_image: gameData.assetKey,
+      large_text: gameData.gameName.slice(0, 128),
+    };
+  }
+  // hiçbiri yoksa düz isimle gönderilir (Discord zaten "Oynuyor" gösterir)
+
+  return payload;
 }
 
 async function applyPresence(state) {
   try {
     const presence = await buildPresenceState(state);
-    state.client.presence.set({
+    // ✅ selfbot-v13 doğru API: activities payload'unu doğrudan gönder
+    await state.client.user.setPresence({
       activities: [presence],
       status: state.statusChoice || 'online',
       afk: false,
@@ -158,7 +173,12 @@ async function applyPresence(state) {
     await sleep(2000);
     try {
       const presence = await buildPresenceState(state);
-      state.client.presence.set({ activities: [presence], status: state.statusChoice || 'online', afk: false, since: 0 });
+      await state.client.user.setPresence({
+        activities: [presence],
+        status: state.statusChoice || 'online',
+        afk: false,
+        since: 0,
+      });
     } catch (err2) {
       console.error('🎮 [OyunPresence] Presence retry hatası:', err2.message);
     }
@@ -221,6 +241,7 @@ export async function startOyunPresence(userId, tokenIndex, gameData, opts = {})
       details: gameData.details || null,
       playerState: gameData.playerState || null,
       imageUrl: gameData.imageUrl || null,
+      assetKey: gameData.assetKey || null,
     },
     statusChoice: opts.statusChoice || 'online',
     startedAt: Date.now(),

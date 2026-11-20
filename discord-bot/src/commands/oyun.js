@@ -11,6 +11,8 @@ import {
 } from '../utils/oyunPresenceRunner.js';
 import { COLORS, THIN_DIVIDER, BRAND, E } from '../utils/embeds.js';
 import { markStart, markStop } from '../utils/playtimeHooks.js';
+import { searchGame } from '../utils/oyunPresenceRunner.js';
+import { ModalBuilder, TextInputBuilder, TextInputStyle } from 'discord.js';
 
 const FOOTER = () => BRAND.footer('Game Presence Engine');
 
@@ -69,6 +71,7 @@ export default {
     const rows = [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('oyun:baslat').setLabel('Oyun Menüsünü Aç').setEmoji('🎮').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId('oyun:ara').setLabel('Oyun Ara (GTA 6, Valorant...)').setEmoji('🔍').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId('oyun:durdur').setLabel('Kendi Oyununu Durdur').setEmoji('🛑').setStyle(ButtonStyle.Danger),
       ),
     ];
@@ -100,6 +103,26 @@ export default {
             .setPlaceholder('🔍 Hesap seç...'),
         )], flags: MessageFlags.Ephemeral,
       });
+    }
+
+    // 🔍 Oyun arama modalı aç
+    if (action === 'ara') {
+      const tokens = getTokens(userId);
+      if (tokens.length === 0) {
+        return interaction.reply({ content: '❌ Kasanızda hesap yok! Önce `!hesaplarim` ile ekleyin.', flags: MessageFlags.Ephemeral });
+      }
+      const modal = new ModalBuilder()
+        .setCustomId('oyun:aramodal')
+        .setTitle('Oyun Ara')
+        .addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('hesap_idx').setLabel('Hesap numarası (1, 2, 3...)')
+              .setStyle(TextInputStyle.Short).setPlaceholder('1').setRequired(true).setMaxLength(3)),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder().setCustomId('game_query').setLabel('Oyun adı')
+              .setStyle(TextInputStyle.Short).setPlaceholder('Grand Theft Auto VI').setRequired(true).setMaxLength(60)),
+        );
+      return interaction.showModal(modal);
     }
 
     if (action === 'durdur') {
@@ -153,6 +176,55 @@ export default {
     }
   },
 
+  async onModalSubmit(interaction, parts) {
+    if (parts[0] !== 'aramodal') return;
+    const userId = interaction.user.id;
+    try {
+      const idx = Number(interaction.fields.getTextInputValue('hesap_idx').trim()) - 1;
+      const query = interaction.fields.getTextInputValue('game_query').trim();
+      const tokens = getTokens(userId);
+      if (isNaN(idx) || idx < 0 || idx >= tokens.length) {
+        return interaction.reply({ content: '❌ Geçersiz hesap numarası — kasada ' + tokens.length + ' hesap var.', flags: MessageFlags.Ephemeral });
+      }
+
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+      // 🌐 Gerçek oyun arama: NEXARDA (free) → Steam fallback
+      const results = await searchGame(query);
+      if (results.length === 0) {
+        return interaction.editReply({ content: `❌ "${query}" için sonuç bulunamadı. Tam adını yazmayı dene.` });
+      }
+
+      const options = results.slice(0, 25).map((g, i) => ({
+        label: g.name.slice(0, 100),
+        description: '🎮 Bu oyunu profilinde göster',
+        value: String(i),
+        emoji: '🎮',
+      }));
+
+      // Arama sonucu + seçim menüsü — seçilince arama sonuç cache'i gerekli
+      globalThis.__oyunAramaCache = globalThis.__oyunAramaCache || new Map();
+      globalThis.__oyunAramaCache.set(`${userId}:${idx}`, results);
+      // 10 dk sonra temizle
+      setTimeout(() => globalThis.__oyunAramaCache?.delete(`${userId}:${idx}`), 10 * 60 * 1000);
+
+      const selectRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder().setCustomId(`oyun:arasec:${idx}`)
+          .addOptions(options).setPlaceholder('🔍 Bulunan oyundan birini seç...')
+      );
+
+      return interaction.editReply({
+        content: `🔍 **"${query}"** için ${results.length} sonuç bulundu — hesap #${idx + 1} için birini seç:`,
+        components: [selectRow],
+      });
+    } catch (err) {
+      console.error('🎮 Oyun arama modal hatası:', err);
+      if (!interaction.replied && !interaction.deferred) {
+        return interaction.reply({ content: '❌ Arama sırasında hata oluştu.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
+    }
+  },
+
   async onSelect(interaction, parts) {
     const action = parts[0];
     const userId = interaction.user.id;
@@ -199,8 +271,8 @@ export default {
         gameName: game.name, 
         details: null, 
         playerState: null,
-        imageUrl: null,
-        assetKey: game.assetKey 
+        imageUrl: game.coverUrl || null,
+        assetKey: game.assetKey || null,
       }, { statusChoice: 'online' });
       
       if (res.success) markStart(userId, 'oyun', idx);
@@ -218,6 +290,46 @@ export default {
         .setFooter(FOOTER())
         .setTimestamp();
         
+      return interaction.editReply({ content: null, embeds: [embed], components: [] });
+    }
+
+    // 🔍 Arama sonucu seçildi → gerçek kapak resmiyle başlat
+    if (action === 'arasec') {
+      const idx = Number(parts[1]);
+      const cache = globalThis.__oyunAramaCache;
+      const results = cache?.get(`${userId}:${idx}`);
+      if (!results) return interaction.update({ content: '❌ Arama sonuçları süresi doldu — tekrar arayın.', components: [] });
+
+      const game = results[Number(interaction.values[0])];
+      if (!game) return interaction.update({ content: '❌ Oyun bulunamadı.', components: [] });
+
+      await interaction.deferUpdate();
+
+      const res = await startOyunPresence(userId, idx, {
+        gameName: game.name,
+        details: null,
+        playerState: null,
+        imageUrl: game.coverUrl || null, // 🖼 gerçek oyun logosu (Discord free external API ile)
+      }, { statusChoice: 'online' });
+
+      if (res.success) markStart(userId, 'oyun', idx);
+      cache?.delete(`${userId}:${idx}`);
+
+      const embed = new EmbedBuilder()
+        .setTitle(res.success ? '🎮 Oyun Presence Aktif!' : '❌ Başlatılamadı')
+        .setColor(res.success ? 0x2b2d31 : COLORS.danger)
+        .setDescription(res.success
+          ? [
+            `> 🎮 **${game.name}**`,
+            game.coverUrl ? `> 🖼 Kapak resmi gerçek logoyla ayarlandı.` : '',
+            `> ✅ **${res.username ?? 'Hesap'}** profilinde artık bu oyunu oynuyor görünüyorsun.`,
+            '> ♻️ Bot yeniden başlasa bile otomatik devam eder.',
+          ].filter(Boolean).join('\n')
+          : `> ⚠️ Hata: \`${res.error}\``)
+        .setThumbnail(game.coverUrl || null)
+        .setFooter(FOOTER())
+        .setTimestamp();
+
       return interaction.editReply({ content: null, embeds: [embed], components: [] });
     }
 
