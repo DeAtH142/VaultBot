@@ -4,7 +4,6 @@ import https from 'https';
 import http from 'http';
 
 // ── Sabitler ────────────────────────────────────────────────────────────
-// DİKKAT: Buradaki ID'lerin yeni sunucudaki kanal ve rollere ait olduğundan emin ol!
 const VERIFICATION_CHANNEL_ID = '1571141518138544248'; 
 const FOLLOW_ROLE_ID = '1569793657261793394';
 const COMMENT_ROLE_ID = '1569795654124052671';
@@ -12,28 +11,43 @@ const COMMENT_ROLE_ID = '1569795654124052671';
 const INSTAGRAM_USERNAME = '0stit.ch_0';
 const TIKTOK_USERNAME = 'gvmusreal';
 
+// Tüm API Anahtarları
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || '';
+const CLOUDFLARE_API_KEY = process.env.CLOUDFLARE_API_KEY || '';
 
-// Güncel modeller (Biri patlarsa diğeri otomatik denenir)
+// ── Modeller ──
 const GROQ_VISION_MODELS = [
-  'qwen/qwen3.8-27b',                  // ✅ Öncelikli model (güncel ve görsel destekli)
-  'meta-llama/llama-4-scout-17b-16e-instruct' // ✅ Yedek model
+  'qwen/qwen3.8-27b',
+  'meta-llama/llama-4-scout-17b-16e-instruct'
 ];
 
 const GEMINI_VISION_MODELS = [
-  'gemini-2.5-flash',                  // ✅ Gemini 1.5'in yerine gelen güncel model
-  'gemini-3.1-flash-lite'              // ✅ Alternatif güncel model
+  'gemini-2.5-flash',
+  'gemini-3.1-flash-lite'
 ];
+
+// ── HAFIZA SİSTEMİ (Akıllı Doğrulama) ──
+// Kullanıcıların yarım kalan işlemlerini tutar. (userId -> { instagram: bool, tiktok: bool, comment: bool })
+const verificationSessions = new Map();
+const SESSION_TIMEOUT_MS = 15 * 60 * 1000; // 15 dakika
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, data] of verificationSessions.entries()) {
+    if (now - data.timestamp > SESSION_TIMEOUT_MS) {
+      verificationSessions.delete(userId);
+    }
+  }
+}, 60 * 1000);
 
 // ── Görüntü İndir ──────────────────────────────────────────────────
 async function downloadImage(url) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith('https') ? https : http;
     client.get(url, (res) => {
-      if (res.statusCode !== 200) {
-        return reject(new Error(`HTTP ${res.statusCode}`));
-      }
+      if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => resolve(Buffer.concat(chunks)));
@@ -68,7 +82,51 @@ const getPrompt = () => `Bu ekran görüntüsünü DİKKATLİCE analiz et:
   "reason": "ne gördüğünü kısa açıkla"
 }`;
 
-// ── Groq Vision API ile Analiz ─────────────────────────────────
+// ── 1. Cloudflare Vision API ile Analiz (En Hızlı ve Stabil) ──────────
+async function analyzeWithCloudflare(imageBuffer) {
+  if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_KEY) {
+    throw new Error('Cloudflare anahtarları eksik');
+  }
+
+  const base64Image = imageBuffer.toString('base64');
+  const prompt = getPrompt();
+
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CLOUDFLARE_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+            ]
+          }
+        ],
+        max_tokens: 500
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Yanıt alınamadı');
+    throw new Error(`Cloudflare Hatası: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.result.response;
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('Cloudflare JSON yanıt bulunamadı');
+  return JSON.parse(jsonMatch[0]);
+}
+
+// ── 2. Groq Vision API ile Analiz ─────────────────────────────────
 async function analyzeWithGroq(imageBuffer, modelId, retryCount = 0) {
   const base64Image = imageBuffer.toString('base64');
   const prompt = getPrompt();
@@ -86,10 +144,7 @@ async function analyzeWithGroq(imageBuffer, modelId, retryCount = 0) {
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            {
-              type: 'image_url',
-              image_url: { url: `data:image/jpeg;base64,${base64Image}` },
-            },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
           ],
         },
       ],
@@ -116,7 +171,7 @@ async function analyzeWithGroq(imageBuffer, modelId, retryCount = 0) {
   return JSON.parse(jsonMatch[0]);
 }
 
-// ── Gemini Vision API ile Analiz ────────────────────────────
+// ── 3. Gemini Vision API ile Analiz ────────────────────────────
 async function analyzeWithGemini(imageBuffer, modelId) {
   const base64Image = imageBuffer.toString('base64');
   const prompt = getPrompt();
@@ -131,19 +186,11 @@ async function analyzeWithGemini(imageBuffer, modelId) {
           {
             parts: [
               { text: prompt },
-              {
-                inline_data: {
-                  mime_type: 'image/jpeg',
-                  data: base64Image,
-                },
-              },
+              { inline_data: { mime_type: 'image/jpeg', data: base64Image } },
             ],
           },
         ],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 500,
-        },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 500 },
       }),
     }
   );
@@ -160,38 +207,48 @@ async function analyzeWithGemini(imageBuffer, modelId) {
   return JSON.parse(jsonMatch[0]);
 }
 
-// ── Ana Analiz Fonksiyonu (Tüm Modelleri Sırayla Dener) ────────────────
+// ── Ana Analiz Fonksiyonu (Sırayla Tüm API'leri Dener) ────────────────
 async function analyzeScreenshot(imageUrl) {
   const imageBuffer = await downloadImage(imageUrl);
   let lastError = null;
 
-  // 1. Groq Modellerini Dene
+  // 1. Önce Cloudflare'i Dene (En güncel ve stabil)
+  if (CLOUDFLARE_ACCOUNT_ID && CLOUDFLARE_API_KEY) {
+    try {
+      console.log(`⏳ Cloudflare AI deneniyor...`);
+      return await analyzeWithCloudflare(imageBuffer);
+    } catch (err) {
+      console.warn(`⚠️ Cloudflare Başarısız: ${err.message}`);
+      lastError = err;
+    }
+  }
+
+  // 2. Sonra Groq'u Dene
   if (GROQ_API_KEY) {
     for (const modelId of GROQ_VISION_MODELS) {
       try {
         console.log(`⏳ Groq deneniyor: ${modelId}`);
         return await analyzeWithGroq(imageBuffer, modelId);
       } catch (err) {
-        console.warn(`⚠️ Groq Modeli Başarısız (${modelId}): ${err.message}`);
+        console.warn(`⚠️ Groq Başarısız (${modelId}): ${err.message}`);
         lastError = err;
       }
     }
   }
 
-  // 2. Gemini Modellerini Dene
+  // 3. En Son Gemini'yi Dene
   if (GEMINI_API_KEY) {
     for (const modelId of GEMINI_VISION_MODELS) {
       try {
         console.log(`⏳ Gemini deneniyor: ${modelId}`);
         return await analyzeWithGemini(imageBuffer, modelId);
       } catch (err) {
-        console.warn(`⚠️ Gemini Modeli Başarısız (${modelId}): ${err.message}`);
+        console.warn(`⚠️ Gemini Başarısız (${modelId}): ${err.message}`);
         lastError = err;
       }
     }
   }
 
-  // Hiçbiri çalışmadıysa fırlat
   throw new Error(`Tüm AI modelleri başarısız oldu. Son Hata: ${lastError?.message}`);
 }
 
@@ -225,11 +282,7 @@ async function analyzeMultipleScreenshots(imageUrls) {
   for (const result of results) {
     if (result.error) {
       combined.failedAnalysis++;
-      combined.details.push({
-        image: result.index,
-        status: '❌ Analiz başarısız',
-        reason: result.error,
-      });
+      combined.details.push({ image: result.index, status: '❌ Analiz başarısız', reason: result.error });
       continue;
     }
 
@@ -313,7 +366,7 @@ async function assignRoles(message, analysis) {
   };
 }
 
-// ── Mesaj Dinleyici ──────────────────────────────────────
+// ── Mesaj Dinleyici (Pro Hafızalı Sistem) ──────────────────────────────────────
 export async function handleVerificationMessage(message) {
   if (message.channel.id !== VERIFICATION_CHANNEL_ID) return;
   if (message.author.bot) return;
@@ -330,10 +383,8 @@ export async function handleVerificationMessage(message) {
         '• Tek birleşik SS (Instagram + TikTok birlikte)\n' +
         '• 2 ayrı SS (Instagram takip + TikTok takip)\n' +
         '• 3 ayrı SS (Instagram + TikTok + Yorum)\n\n' +
-        '💡 **İpucu:** Birden fazla SS atabilirsin!'
-      )
-      .setFooter({ text: 'Her iki hesabı da takip ettiğini göster' });
-
+        '💡 **İpucu:** Parça parça da atabilirsin, bot seni hatırlar!'
+      );
     await message.reply({ embeds: [embed] }).catch(() => { });
     return;
   }
@@ -343,59 +394,64 @@ export async function handleVerificationMessage(message) {
     .setTitle('🔍 Kontrol Ediliyor...')
     .setDescription(
       `**${imageAttachments.size} ekran görüntüsü** analiz ediliyor...\n\n` +
-      '⏳ Bu birkaç saniye sürebilir, lütfen bekle.'
-    )
-    .setFooter({ text: 'AI ile otomatik analiz yapılıyor' });
-
+      '⏳ Lütfen bekle.'
+    );
   const waitMsg = await message.reply({ embeds: [waitEmbed] });
 
   try {
+    // Kullanıcının hafızasını yükle
+    let session = verificationSessions.get(message.author.id) || { 
+      instagram: false, tiktok: false, comment: false, timestamp: Date.now() 
+    };
+    session.timestamp = Date.now(); // Süreyi yenile
+
     const imageUrls = imageAttachments.map(att => att.url);
     const analysis = await analyzeMultipleScreenshots(imageUrls);
 
-    console.log('📊 Birleşik analiz sonucu:', analysis);
+    // Yeni analiz sonuçlarını hafızaya ekle
+    if (analysis.instagram_follow) session.instagram = true;
+    if (analysis.tiktok_follow) session.tiktok = true;
+    if (analysis.has_comment) session.comment = true;
 
-    if (analysis.successfulAnalysis === 0) {
-      const errorEmbed = new EmbedBuilder()
-        .setColor(0xff0000)
-        .setTitle('❌ Analiz Başarısız')
+    verificationSessions.set(message.author.id, session);
+
+    // Eksiklik kontrolü (Hafızadaki verilere göre)
+    const missing = [];
+    if (!session.instagram) missing.push('📸 Instagram takip');
+    if (!session.tiktok) missing.push('🎵 TikTok takip');
+
+    if (missing.length > 0) {
+      const embed = new EmbedBuilder()
+        .setColor(0xffaa00)
+        .setTitle('⏳ Doğrulama Devam Ediyor...')
         .setDescription(
-          'Hiçbir ekran görüntüsü analiz edilemedi.\n\n' +
-          '**Sebep:** Görüntüler net değil veya okunamıyor.\n\n' +
-          'Lütfen daha net ekran görüntüleri yükle.'
-        );
-
-      await waitMsg.edit({ embeds: [errorEmbed] });
+          `**Şu ana kadar kabul edilenler:**\n` +
+          `${session.instagram ? '✅ 📸 Instagram: **Onaylandı**' : '⏳ 📸 Instagram: **Bekleniyor**'}\n` +
+          `${session.tiktok ? '✅ 🎵 TikTok: **Onaylandı**' : '⏳ 🎵 TikTok: **Bekleniyor**'}\n` +
+          `${session.comment ? '✅ 💬 Yorum: **Onaylandı**' : '➖ 💬 Yorum: (Opsiyonel)'}\n\n` +
+          `Lütfen eksik olan **${missing.join(' ve ')}** ekran görüntüsünü bu kanala at.`
+        )
+        .setFooter({ text: '15 dakika içinde tamamlamalısın.' });
+      
+      await waitMsg.edit({ content: null, embeds: [embed] });
       return;
     }
 
-    const result = await assignRoles(message, analysis);
+    // Her iki takipte tamamsa rolleri ver
+    const result = await assignRoles(message, {
+      instagram_follow: session.instagram,
+      tiktok_follow: session.tiktok,
+      has_comment: session.comment
+    });
+
+    verificationSessions.delete(message.author.id); // İşlem bitince hafızayı temizle
 
     if (!result.success) {
       const failEmbed = new EmbedBuilder()
         .setColor(0xff0000)
         .setTitle('❌ Doğrulama Başarısız')
-        .setDescription(result.reason)
-        .addFields(
-          { 
-            name: '📊 Analiz Sonuçları', 
-            value: (
-              `📸 Instagram: ${result.instagram_follow ? '✅ Takip ediliyor' : '❌ Takip edilmiyor'}\n` +
-              `🎵 TikTok: ${result.tiktok_follow ? '✅ Takip ediliyor' : '❌ Takip edilmiyor'}\n` +
-              `📷 Analiz edilen: ${analysis.successfulAnalysis}/${analysis.totalImages} SS`
-            )
-          }
-        );
-
-      if (analysis.details.length > 0) {
-        const detailsText = analysis.details.map(d => {
-          const found = d.found ? d.found.join(', ') : d.status;
-          return `**SS ${d.image}:** ${found}`;
-        }).join('\n');
-        failEmbed.addFields({ name: '🔍 Görüntü Detayları', value: detailsText || 'Bilgi yok' });
-      }
-
-      await waitMsg.edit({ embeds: [failEmbed] });
+        .setDescription(result.reason);
+      await waitMsg.edit({ content: null, embeds: [failEmbed] });
       return;
     }
 
@@ -423,18 +479,7 @@ export async function handleVerificationMessage(message) {
       .setFooter({ text: 'Desteğin için teşekkürler! 💙' })
       .setTimestamp();
 
-    if (analysis.details.length > 0) {
-      const detailsText = analysis.details.map(d => {
-        const found = d.found ? d.found.join(', ') : 'Hiçbir şey';
-        return `**SS ${d.image}:** ${found}`;
-      }).join('\n');
-      successEmbed.addFields({ 
-        name: `🔍 Analiz Detayları (${analysis.successfulAnalysis}/${analysis.totalImages} SS)`, 
-        value: detailsText || 'Bilgi yok' 
-      });
-    }
-
-    await waitMsg.edit({ embeds: [successEmbed] });
+    await waitMsg.edit({ content: null, embeds: [successEmbed] });
 
   } catch (err) {
     console.error('❌ Sosyal medya doğrulama hatası:', err);
@@ -463,7 +508,7 @@ export default {
       .setTitle('📱 Sosyal Medya Doğrulama Sistemi')
       .setDescription(
         `<#${VERIFICATION_CHANNEL_ID}> kanalına aşağıdaki hesapları takip ettiğini gösteren ekran görüntülerini at!\n\n` +
-        '💡 **Birden fazla SS atabilirsin!**'
+        '💡 **Artık parça parça atabilirsin!** İster ikisini aynı anda at, ister tek tek at. Bot seni hatırlar.'
       )
       .addFields(
         { name: '📸 Instagram', value: `[@${INSTAGRAM_USERNAME}](https://instagram.com/${INSTAGRAM_USERNAME})`, inline: true },
@@ -471,28 +516,14 @@ export default {
         { name: '\u200b', value: '\u200b', inline: true },
         {
           name: '🎁 Ödüller',
-          value:
-            '**Sadece Takip:** <@&' + FOLLOW_ROLE_ID + '>\n' +
-            '**Takip + Yorum:** <@&' + COMMENT_ROLE_ID + '>',
+          value: '**Sadece Takip:** <@&' + FOLLOW_ROLE_ID + '>\n**Takip + Yorum:** <@&' + COMMENT_ROLE_ID + '>',
         },
         {
           name: '📝 Kabul Edilen Formatlar',
-          value:
-            '• Tek birleşik SS (Instagram + TikTok birlikte)\n' +
-            '• 2 ayrı SS (Instagram takip + TikTok takip)\n' +
-            '• 3 ayrı SS (Instagram + TikTok + Yorum SS)\n' +
-            '• Türkçe veya İngilizce arayüz',
-        },
-        {
-          name: '📋 Gereksinimler',
-          value:
-            '• Her iki hesabı da takip etmelisin\n' +
-            '• "Takiptesin" / "Takip Ediliyor" butonu görünmeli\n' +
-            '• Kullanıcı adları net okunabilir olmalı\n' +
-            '• Yorum attıysan yorumun da görünmesi gerekli',
+          value: '• Tek birleşik SS\n• 2 ayrı SS (Tek tek atabilirsin)\n• 3 ayrı SS (Yorum için)',
         }
       )
-      .setFooter({ text: '🤖 SS yükledikten sonra AI ile otomatik kontrol edilecek!' });
+      .setFooter({ text: '🤖 Cloudflare & Groq & Gemini AI ile kontrol edilecek!' });
 
     await message.reply({ embeds: [embed] });
   },
