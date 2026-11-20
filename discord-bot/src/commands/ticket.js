@@ -6,6 +6,7 @@ import {
   ChannelType,
   EmbedBuilder,
   ModalBuilder,
+  OverwriteType,
   PermissionFlagsBits,
   StringSelectMenuBuilder,
   TextInputBuilder,
@@ -122,9 +123,17 @@ function getCategory(categoryId) {
   return CATEGORIES[categoryId] || null;
 }
 
+function getSupportRoleIds() {
+  const roleIds = TICKET_CONFIG.supportRoleIds;
+  if (!Array.isArray(roleIds) || roleIds.some(roleId => typeof roleId !== 'string' || !/^\d{17,20}$/.test(roleId))) {
+    throw new Error('TICKET_CONFIG.supportRoleIds değerleri tırnak içinde Discord rol ID’si olmalıdır.');
+  }
+  return roleIds;
+}
+
 function hasStaffRole(member) {
-  const configuredRoles = TICKET_CONFIG.supportRoleIds;
-  if (!Array.isArray(configuredRoles) || configuredRoles.length === 0) return false;
+  const configuredRoles = getSupportRoleIds();
+  if (configuredRoles.length === 0) return false;
 
   const roles = member?.roles;
   if (roles?.cache) return configuredRoles.some(roleId => roles.cache.has(roleId));
@@ -171,21 +180,22 @@ function supportOverwrites(guild, userId, includeSend = true, voice = false) {
   if (voice) supportPermissions.push(PermissionFlagsBits.Connect, PermissionFlagsBits.Speak);
 
   const overwrites = [
-    { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-    { id: userId, allow: allowUser },
+    { id: guild.roles.everyone.id, type: OverwriteType.Role, deny: [PermissionFlagsBits.ViewChannel] },
+    { id: userId, type: OverwriteType.Member, allow: allowUser },
   ];
 
-  for (const roleId of TICKET_CONFIG.supportRoleIds) {
-    overwrites.push({ id: roleId, allow: supportPermissions });
+  for (const roleId of getSupportRoleIds()) {
+    overwrites.push({ id: roleId, type: OverwriteType.Role, allow: supportPermissions });
   }
 
   if (TICKET_CONFIG.ownerId !== userId) {
-    overwrites.push({ id: TICKET_CONFIG.ownerId, allow: supportPermissions });
+    overwrites.push({ id: TICKET_CONFIG.ownerId, type: OverwriteType.Member, allow: supportPermissions });
   }
 
   if (guild.members.me) {
     overwrites.push({
       id: guild.members.me.id,
+      type: OverwriteType.Member,
       allow: [
         PermissionFlagsBits.ViewChannel,
         PermissionFlagsBits.SendMessages,
@@ -676,7 +686,7 @@ async function handleUserAction(interaction, ticketId, action) {
     ReadMessageHistory: true,
     AttachFiles: true,
     EmbedLinks: true,
-  }, { reason: `Ticket #${ticket.id} için yetkili tarafından eklendi` });
+  }, { type: OverwriteType.Member, reason: `Ticket #${ticket.id} için yetkili tarafından eklendi` });
   ticket.memberIds = [...new Set([...(ticket.memberIds || []), member.id])];
   await writeTicket(ticket);
   await auditTicket(interaction.guild, ticket, `Üye eklendi: ${member.user.tag}`, interaction.user.id);
@@ -821,7 +831,7 @@ async function handleButton(interaction, parts) {
       ReadMessageHistory: true,
       AttachFiles: true,
       EmbedLinks: true,
-    }, { reason: `Ticket #${ticket.id} yeniden açıldı` });
+    }, { type: OverwriteType.Member, reason: `Ticket #${ticket.id} yeniden açıldı` });
     ticket.status = 'open';
     ticket.locked = false;
     ticket.assignedToId = null;
@@ -875,7 +885,10 @@ async function handleButton(interaction, parts) {
     await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
       SendMessages: !shouldLock,
       AttachFiles: !shouldLock,
-    }, { reason: shouldLock ? `Ticket #${ticket.id} kilitlendi` : `Ticket #${ticket.id} kilidi açıldı` });
+    }, {
+      type: OverwriteType.Member,
+      reason: shouldLock ? `Ticket #${ticket.id} kilitlendi` : `Ticket #${ticket.id} kilidi açıldı`,
+    });
     ticket.locked = shouldLock;
   }
 
@@ -916,7 +929,7 @@ async function handleCloseSubmit(interaction, ticketId) {
   await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
     SendMessages: false,
     AttachFiles: false,
-  }, { reason: `Ticket #${ticket.id} kapatıldı` });
+  }, { type: OverwriteType.Member, reason: `Ticket #${ticket.id} kapatıldı` });
 
   ticket.status = 'closed';
   ticket.locked = true;
@@ -928,7 +941,10 @@ async function handleCloseSubmit(interaction, ticketId) {
     await interaction.channel.permissionOverwrites.edit(ticket.ownerId, {
       SendMessages: !oldLocked,
       AttachFiles: !oldLocked,
-    }, { reason: `Ticket #${ticket.id} kapanış kaydı başarısız oldu; önceki izinler geri yüklendi` });
+    }, {
+      type: OverwriteType.Member,
+      reason: `Ticket #${ticket.id} kapanış kaydı başarısız oldu; önceki izinler geri yüklendi`,
+    });
     throw error;
   }
 
@@ -1066,14 +1082,15 @@ async function runTicketReminders(client) {
         ticket.lastUserReminderAt = new Date(now).toISOString();
         await writeTicket(ticket);
       } else if (ticket.status !== 'waiting_user' && elapsed >= TICKET_CONFIG.staffReminderMs) {
-        const recipients = TICKET_CONFIG.supportRoleIds.length
-          ? TICKET_CONFIG.supportRoleIds.map(roleId => `<@&${roleId}>`).join(' ')
+        const supportRoleIds = getSupportRoleIds();
+        const recipients = supportRoleIds.length
+          ? supportRoleIds.map(roleId => `<@&${roleId}>`).join(' ')
           : `<@${TICKET_CONFIG.ownerId}>`;
         await channel.send({
           content: `${recipients} ⏰ Ticket #${ticket.id} uzun süredir ilk yanıtı bekliyor.`,
           allowedMentions: {
-            users: TICKET_CONFIG.supportRoleIds.length ? [] : [TICKET_CONFIG.ownerId],
-            roles: TICKET_CONFIG.supportRoleIds,
+            users: supportRoleIds.length ? [] : [TICKET_CONFIG.ownerId],
+            roles: supportRoleIds,
           },
         });
         ticket.lastStaffReminderAt = new Date(now).toISOString();
