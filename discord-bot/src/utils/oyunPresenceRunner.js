@@ -12,7 +12,14 @@ const SPOTIFY_APP_ID = '1336326530712000543';
 const coverProxyCache = new Map();
 
 async function resolveCoverAsset(client, imageUrl) {
-  if (!imageUrl) return undefined;
+  // ⚠️ Discord external asset API: URL en fazla 256 karakter olabilir.
+  // NEXARDA'nın bazı CDN linkleri bunu aşıyor → uzun URL'leri atla, düz isimle devam et.
+  if (!imageUrl || typeof imageUrl !== 'string') return undefined;
+  if (imageUrl.length > 256) {
+    console.warn(`🎮 [OyunPresence] Kapak URL'si çok uzun (${imageUrl.length} karakter) — resim olmadan devam ediliyor.`);
+    return undefined;
+  }
+  if (!/^https?:\/\//i.test(imageUrl)) return undefined;
   if (coverProxyCache.has(imageUrl)) return coverProxyCache.get(imageUrl);
   try {
     const ext = await RichPresence.getExternal(client, SPOTIFY_APP_ID, imageUrl);
