@@ -1,19 +1,19 @@
 # .github/workflows/bot.yml
-# 🔐 Vault Bot — GitHub Actions üzerinde 7/24 çalıştırma + elle aç/kapa kontrolü
+# 🔐 Vault Bot — GitHub Actions'ta KESİNTİSİZ (blue-green) 7/24 çalıştırma
 #
-# GitHub Actions'ın ücretsiz kotada dakika limiti vardır (public repo'da sınırsız,
-# private repo'da ayda 2000 dakika). Kotayı aşmamak için bot 5 saatlik bloklar
-# halinde çalışır ve her blok sonunda yeniden başlatılır. Bu sayede datanız
-# Firestore'da kalıcıdır ve bot "uç kapanıp açma" senaryosunda kaldığı yerden
-# devam eder (recovery + bulut senkronu).
+# Nasıl çalışır?
+#   1. Bot oturumu Firestore'a sessionId/startedAt/status/lastHeartbeat yazar.
+#   2. Bot her 30 sn'de heartbeat gönderir.
+#   3. ~4.5 saat sonra bot KENDİNİ kapatır (SESSION_RUNTIME_MS) ve job biter.
+#   4. restart job'ı hemen yeni bir oturum dispatch eder (zincir kopmaz).
+#   5. Yeni oturum 'ready' olunca Firestore üzerinden eski oturuma
+#      'draining' yazar — ama eski zaten kendini kapatmış olur (sıralı ve temiz).
+#   6. Watchdog: herhangi bir sebeple oturum koparsa (crash, timeout, Actions
+#      kesintisi) 15 dakikalık scheduled kontrol fark eder ve botu yeniden başlatır.
 #
-# GEREKLİ GITHUB SECRETS (Repo > Settings > Secrets and variables > Actions):
-#   DISCORD_TOKEN            -> bot ana tokeni
-#   FIREBASE_SERVICE_ACCOUNT -> Service Account JSON'un TAMAMI (tek satır, string)
+# Yani: sen hiçbir şey yapmazsın. Bot kendini sürekli yeniden başlatır.
 #
-# Opsiyonel secrets:
-#   ENCRYPTION_KEY           -> token şifreleme anahtarı (varsa)
-#   DISCORD_TOKEN2..N        -> birden fazla token kullanılıyorsa
+# GEREKLİ SECRETS: DISCORD_TOKEN, FIREBASE_SERVICE_ACCOUNT (opsiyonel: ENCRYPTION_KEY)
 
 name: Vault Bot
 
@@ -34,22 +34,24 @@ on:
       - 'src/**'
       - 'package.json'
       - '.github/workflows/bot.yml'
+  # 🔒 Watchdog: her 15 dakikada oturum sağlığını kontrol et
+  schedule:
+    - cron: '*/15 * * * *'
 
+# Aynı anda tek oturum: yenisi eskisi bitmeden başlamaz (SıRALI geçiş).
+# Bot kendi kendini 4.5 saatte bir kapattığı için kesinti sadece
+# job başlatma süresi (~1 dk) olur; watchdog kopmaları kurtarır.
 concurrency:
   group: vault-bot
   cancel-in-progress: false
 
 jobs:
   run-bot:
-    # action=stop gönderilirse hiç çalıştırma
+    # stop komutu veya watchdog'un "bot sağ" kararı durumunda çalışmaz
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'stop' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 300  # 5 saat sonra job kendini bitirir; scheduler yeniden başlatır
+    timeout-minutes: 330  # SESSION_RUNTIME_MS (4.5h) + grace
     steps:
-      - name: ☁️ Bot durdurma komutu kontrolü
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'stop' }}
-        run: echo "Kullanıcı botu elle durdurdu. Job çalışmayacak."
-
       - name: ⬇️ Repo kopyala
         uses: actions/checkout@v4
 
@@ -72,6 +74,8 @@ jobs:
           ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           CLOUD_SYNC_INTERVAL_MS: '15000'
+          SESSION_RUNTIME_MS: '16200000'   # 4.5 saat — sonra kontrollü kapanış
+          HEARTBEAT_INTERVAL_MS: '30000'
         shell: bash
         run: |
           for attempt in 1 2 3; do
@@ -82,7 +86,6 @@ jobs:
               sleep 30
             fi
           done
-          # Son durum: buluta kesin yedek at (crash olsa bile veri kaybı olmasın)
           exit 0
 
       - name: 🔥 data/ klasörünü Firestore'a yükle (kapanışta)
@@ -91,14 +94,48 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node scripts/cloud-sync.js push
 
-  # ── 5 saatlik blokları zincirleme başlatan scheduler ────────────────────────
+  # ── Zincir başlatıcı: her oturum bitiminde yenisini tetikler ──────────────
   restart:
-    # "stop" komutunda yeniden başlatma, aksi halde botu sonsuza dek tekrar başlat
     if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'stop') }}
     needs: run-bot
     runs-on: ubuntu-latest
     steps:
       - name: ♻️ Yeniden başlatma workflow'u tetikle
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'bot.yml',
+              ref: context.ref,
+              inputs: { action: 'start' }
+            });
+
+  # ── Watchdog: bot öldüyse (heartbeat yoksa) yeniden başlat ────────────────
+  watchdog:
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Repo kopyala
+        uses: actions/checkout@v4
+
+      - name: 🩺 Oturum sağlığı kontrolü
+        id: health
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          RESULT=$(node scripts/session-watchdog.mjs 2>&1 | tail -1)
+          echo "Sonuç: $RESULT"
+          if [ "$RESULT" == "DEAD" ]; then
+            echo "healthy=false" >> $GITHUB_OUTPUT
+          else
+            echo "healthy=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🚑 Bot ölmüş — yeniden başlat
+        if: ${{ steps.health.outputs.healthy == 'false' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

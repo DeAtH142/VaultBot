@@ -27,6 +27,7 @@ import { reconcileOnBoot, heartbeat, closeAllOnShutdown, fmtHours, getPlaytimeUs
 import { resetLiveKeys, syncUser, listTrackedUsers, processPendingAwards } from './utils/playtimeHooks.js';
 import { handleVerificationMessage } from './commands/sosyalmedya.js';
 import { startSubscriptionChecker } from './utils/subscriptionChecker.js';
+import { registerSession, markSessionReady, startHeartbeat, markSessionStopped } from './utils/sessionHandover.js';
 
 dotenv.config();
 
@@ -120,6 +121,10 @@ client.once('ready', () => {
 
   startPeriodicPush();
   startSubscriptionChecker(client);
+
+  // 🔄 Blue-green handover: hazırız — eski oturuma draining komutu gönder
+  markSessionReady().catch(console.error);
+  startHeartbeat(() => gracefulShutdown('handover-drain'));
 
   try {
     resetLiveKeys(); 
@@ -306,6 +311,7 @@ process.on('uncaughtException', (err) => {
 
 // ── Buluttan state indir ve giriş yap ────────────────────────────
 if (isCloudEnabled()) {
+  registerSession().catch(console.error).finally(() => { });
   pullFromCloud()
     .catch(err => console.error('[CloudStore] Bulut indirilemedi, lokal data ile devam:', err.message))
     .finally(() => client.login(process.env.DISCORD_TOKEN));
@@ -366,6 +372,7 @@ function registerExistingSessions() {
 // ── Graceful shutdown ──────────────────
 async function gracefulShutdown(reason) {
   console.log(`\n🛑 Bot kapatılıyor (${reason})...`);
+  try { await markSessionStopped(reason); } catch (err) { console.error('[Handover] kapanış hatası:', err.message); }
   try { closeAllOnShutdown(); } catch (err) { console.error('[Playtime] Kapanış hatası:', err.message); }
   try { destroyAllAccounts(); } catch (err) { console.error('[AccountPool] Kapanış hatası:', err.message); }
   try { destroyAllBumps(); } catch (err) { console.error('[Bump] Kapanış hatası:', err.message); }
