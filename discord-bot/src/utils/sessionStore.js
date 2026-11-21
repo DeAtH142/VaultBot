@@ -27,6 +27,9 @@ export function writeSessions(store) {
 }
 
 /**
+ * Oturum kaydet.
+ * `data.guildId` doluysa anahtar `${userId}:${tokenIndex}:${guildId}` olur —
+ * böylece aynı hesap birden fazla sunucuda ayrı ayrı kayıtlı kalır.
  * @param {string} module - 'autotyper' | 'voiceafk' | ...
  * @param {string} userId
  * @param {number} tokenIndex
@@ -34,7 +37,9 @@ export function writeSessions(store) {
  */
 export function saveSession(module, userId, tokenIndex, data) {
   const store = readSessions();
-  const key = `${userId}:${tokenIndex}`;
+  const key = data?.guildId
+    ? `${userId}:${tokenIndex}:${data.guildId}`
+    : `${userId}:${tokenIndex}`;
   store[module] = store[module] || {};
   store[module][key] = { userId, tokenIndex, ...data, updatedAt: new Date().toISOString() };
   writeSessions(store);
@@ -45,15 +50,28 @@ export function getSession(module, userId, tokenIndex) {
   return store[module]?.[`${userId}:${tokenIndex}`] || null;
 }
 
-export function deleteSession(module, userId, tokenIndex) {
+/**
+ * Oturum sil.
+ * `guildId` verilirse sadece o sunucunun kaydı, verilmezse hesabın TÜM kayıtları silinir.
+ */
+export function deleteSession(module, userId, tokenIndex, guildId = null) {
   const store = readSessions();
-  const key = `${userId}:${tokenIndex}`;
-  if (store[module]?.[key]) {
-    delete store[module][key];
-    writeSessions(store);
-    return true;
+  if (!store[module]) return false;
+
+  const prefix = `${userId}:${tokenIndex}`;
+  const keys = guildId
+    ? [`${prefix}:${guildId}`]
+    : Object.keys(store[module]).filter(k => k === prefix || k.startsWith(`${prefix}:`));
+
+  let removed = false;
+  for (const key of keys) {
+    if (store[module][key]) {
+      delete store[module][key];
+      removed = true;
+    }
   }
-  return false;
+  if (removed) writeSessions(store);
+  return removed;
 }
 
 export function getUserSessions(module, userId) {

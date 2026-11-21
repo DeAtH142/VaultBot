@@ -388,6 +388,7 @@ export default {
     }
 
     if (action === 'tumukaldır' || action === 'tumukaldir') {
+      const tokens = getTokens(userId);
       let stopped = 0;
       tokens.forEach((_, i) => {
         if (stopVoiceAfk(userId, i).success) {
@@ -429,7 +430,7 @@ export default {
     if (action === 'kaldironay') {
       const idx = parseInt(interaction.values[0], 10);
       let stopped = false;
-      try { stopped = stopVoiceAfk(userId, idx).success; } catch {}
+      try { stopped = stopVoiceAfk(userId, idx).success; } catch { }
       store.del(userId, idx);
 
       // Menü zaten ephemeral — update OK (sadece bu kullanıcının gördüğü mesaj)

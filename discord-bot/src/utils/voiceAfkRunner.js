@@ -1,16 +1,19 @@
-// src/utils/voiceAfkRunner.js — 🌙 Ses AFK Motoru v2 (Stabil)
+// src/utils/voiceAfkRunner.js — 🌙 Ses AFK Motoru v3 (Çok Kanallı)
 //
-// v1'deki sorun: her başlatmada YENİ bir Discord client açılıyordu. Aynı hesap
-// 2 kez bağlanınca Discord eski bağlantıyı atıyor → kanaldan düşme, ses
-// bağlantısının ölmesi, "ben AFK bırakınca diğeri çıkıyor" hatası.
+// v1: her başlatmada yeni Discord client → aynı hesap 2 kez bağlanınca kopma.
+// v2: hesap başına TEK client (accountPool) + gerçek bağlantı durumu takibi.
+// v3: AYNI HESAP ARTIK BİRDEN FAZLA SUNUCUDA AFK KALABİLİR.
+//     • A sunucusu + B sunucusu aynı anda → izinli
+//     • Aynı sunucuda iki farklı kanal               → engelli
+//     • Aynı kanala iki kez                          → zaten bağlı, atlanır
+//     Her oturum ayrı state taşır (kendi connection, kendi sağlık kontrolü).
 //
-// v2 çözümü:
-//   • accountPool → hesap başına TEK client (Online/AutoTyper ile paylaşılır)
+// Diğer özellikler:
 //   • VoiceConnectionStatus ile gerçek bağlantı durumu izlenir
 //   • Yeniden bağlanma backoff'lu (3s → 5s → 10s → 20s → 30s)
 //   • Kanal dolu/erişim yoksa opsiyonel yedek kanala geçer
 //   • Sunucu/kanal silinirse ısrar etmez, temiz kapatır
-//   • Deafen/Mute durumu korunur, "moved" olayında yeni kanala kendini taşır
+//   • Deafen/Mute durumu korunur
 
 import { joinVoiceChannel, VoiceConnectionStatus, entersState } from '@discordjs/voice';
 import { acquire, release, peek, refsOf } from './accountPool.js';
@@ -18,7 +21,12 @@ import { saveSession, deleteSession, getAllSessions } from './sessionStore.js';
 import { sleep } from './selfbotHelpers.js';
 
 const MODULE = 'voiceafk';
-const runningSessions = new Map(); // `${userId}:${tokenIndex}` -> state
+const DM_GUILD = '@me'; // DM sesleri için sentinel guild ID
+
+// `${userId}:${tokenIndex}:${guildId}` → state  (hesap başına SUNUCU BAŞINA bir oturum)
+const runningSessions = new Map();
+// `${userId}:${tokenIndex}` → true  (hesabın havuzdaki client'ını kiralayan modül sayacı)
+const heldTokens = new Set();
 
 // ── Ayarlanabilir sabitler ───────────────────────────────────────────────
 const HEALTH_CHECK_MS = 20_000;      // sağlık kontrolü aralığı
@@ -27,6 +35,13 @@ const MAX_RECONNECT_FAILS = 6;       // art arda yeniden bağlanma başarısızl
 const BACKOFF = [3000, 5000, 10_000, 20_000, 30_000];
 
 const keyOf = (userId, tokenIndex) => `${userId}:${tokenIndex}`;
+const sessionKeyOf = (userId, tokenIndex, guildId) => `${userId}:${tokenIndex}:${guildId}`;
+
+/** Hesabın çalışan oturumları */
+function sessionsOf(userId, tokenIndex) {
+  const prefix = `${keyOf(userId, tokenIndex)}:`;
+  return [...runningSessions.entries()].filter(([k]) => k.startsWith(prefix));
+}
 
 // ── Yardımcılar ──────────────────────────────────────────────────────────
 function isChannelFull(ch, client) {
@@ -58,20 +73,86 @@ function adapterFor(guild) {
     || (guild.client?.voice?.adapters?.get?.(guild.id));
 }
 
-// ── Başlat ───────────────────────────────────────────────────────────────
-export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts = {}) {
-  const key = keyOf(userId, tokenIndex);
+// ── Çok kanal kuralı ────────────────────────────────────────────────────
+// ✅ Aynı hesap, FARKLI sunucular → serbest (her sunucuda 1 kanal)
+// ⛔ Aynı hesap, aynı sunucuda farklı kanal → engelli
+// ⛔ Aynı Discord hesabı farklı slotta, aynı sunucuda → engelli
+function describeTarget(guildId, channelId) {
+  return guildId === DM_GUILD ? `DM \`${channelId}\`` : `\`${guildId}\` / \`${channelId}\``;
+}
 
-  // Aynı hesap zaten AFK'ta → tekrar bağlanma, sadece ayarı güncelle
-  const current = runningSessions.get(key);
-  if (current) {
-    if (current.guildId === guildId && current.channelId === channelId) {
-      return { success: true, username: current.username, alreadyRunning: true };
+/**
+ * Hesap bu sunucuda başka bir kanalda mı?
+ * @returns {{busy:boolean, already?:boolean, reason?:string, where?:string}}
+ */
+export function checkAccountVoiceConflict(userId, tokenIndex, guildId, channelId) {
+  // 1) Aynı slot + aynı sunucu
+  for (const [, state] of sessionsOf(userId, tokenIndex)) {
+    if (state.guildId !== guildId) continue; // farklı sunucu → serbest
+    if (state.currentChannelId === channelId || state.channelId === channelId) {
+      return { busy: false, already: true };
     }
-    stopVoiceAfk(userId, tokenIndex, { silent: true });
+    return {
+      busy: true,
+      reason: 'Bu hesap aynı sunucuda zaten başka bir ses kanalında.',
+      where: describeTarget(state.guildId, state.currentChannelId),
+    };
   }
 
-  // 🎯 Havuzdan ortak client al — YENİ BAĞLANTI AÇMAZ
+  // 2) Aynı Discord hesabı başka slota kayıtlı ve o slotta bu sunucuda seste mi?
+  const client = peek(userId, tokenIndex);
+  const discordId = client?.user?.id;
+  if (discordId) {
+    for (const [k, state] of runningSessions.entries()) {
+      if (state.userId === userId && state.tokenIndex === tokenIndex) continue;
+      if (state.client?.user?.id !== discordId) continue;   // başka hesap → serbest
+      if (state.guildId !== guildId) continue;              // farklı sunucu → serbest
+      return {
+        busy: true,
+        reason: 'Bu Discord hesabı kasanızda başka bir slota da ekli ve o slot bu sunucuda seste.',
+        where: describeTarget(state.guildId, state.currentChannelId),
+      };
+    }
+  }
+
+  return { busy: false };
+}
+
+// ── Başlat ───────────────────────────────────────────────────────────────
+export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts = {}) {
+  const sKey = sessionKeyOf(userId, tokenIndex, guildId);
+
+  // Aynı hesap bu sunucuda zaten bağlı mı? → yeni bağlantı açma
+  const current = runningSessions.get(sKey);
+  if (current) {
+    // Aynı kanal → \"zaten çalışıyor\"; sadece mute/deaf değiştiyse yeniden bağlan
+    const sameChannel = current.channelId === channelId && current.currentChannelId === channelId;
+    const muteChanged = (opts.selfMute !== undefined && (opts.selfMute !== false) !== current.selfMute)
+      || (opts.selfDeaf !== undefined && (opts.selfDeaf !== false) !== current.selfDeaf);
+    if (sameChannel && !muteChanged) {
+      return { success: true, username: current.username, alreadyRunning: true };
+    }
+    if (sameChannel) {
+      // Aynı kanalda yalnızca mute/deaf değişti → yeniden bağlan (kanal aynı kalır)
+      stopVoiceAfk(userId, tokenIndex, { silent: true, guildId });
+    } else {
+      // ⛔ Aynı sunucuda BAŞKA kanal → tek hesap aynı sunucuda iki kanala giremez
+      return {
+        success: false,
+        conflict: true,
+        where: describeTarget(current.guildId, current.currentChannelId),
+        error: 'Bu hesap aynı sunucuda zaten başka bir ses kanalında.',
+      };
+    }
+  }
+
+  // ⛔ Aynı sunucuda başka kanal / çift slot koruması (farklı sunucular serbest)
+  const conflict = checkAccountVoiceConflict(userId, tokenIndex, guildId, channelId);
+  if (conflict.busy) {
+    return { success: false, error: conflict.reason, conflict: true, where: conflict.where };
+  }
+
+  // 🎯 Havuzdan ortak client al — hesap kaç sunucuda olursa olsun TEK bağlantı
   const session = await acquire(userId, tokenIndex, MODULE);
   if (!session.success) return { success: false, error: session.error };
 
@@ -95,7 +176,8 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
       connecting: false,
       lastError: null,
     };
-    runningSessions.set(key, state);
+    runningSessions.set(sKey, state);
+    heldTokens.add(keyOf(userId, tokenIndex));
 
     // ── Bağlantı kur ────────────────────────────────────────────────────
     const connect = async () => {
@@ -134,7 +216,8 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
           adapterCreator: adapter,
           selfDeaf: state.selfDeaf,
           selfMute: state.selfMute,
-          group: client.user.id, // aynı user için tek connection grubu
+          // Sunucu başına ayrı grup → farklı sunuculardaki bağlantılar birbirini ezmez
+          group: `${client.user.id}:${state.guildId}`,
         });
         state.connection = conn;
         state.currentChannelId = target.id;
@@ -175,14 +258,16 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
     }
 
     if (!joined) {
-      stopVoiceAfk(userId, tokenIndex, { silent: true });
+      stopVoiceAfk(userId, tokenIndex, { silent: true, guildId });
       return { success: false, error: state.lastError || `Ses kanalına bağlanılamadı (${MAX_JOIN_ATTEMPTS} deneme)` };
     }
 
     state.connectFails = 0;
+    // guildId 4. parametre → kayıt `${userId}:${tokenIndex}:${guildId}` anahtarıyla ayrı tutulur
+    // (aynı hesabın başka sunucudaki kayıtları birbirini silmez)
     saveSession(MODULE, userId, tokenIndex, {
       guildId, channelId, username: state.username, fallbackChannelId: state.fallbackChannelId,
-    });
+    }, guildId);
 
     // ── Sağlık kontrolü: sadece gerçekten koptuysa müdahale et ─────────
     state.timer = setInterval(async () => {
@@ -191,7 +276,7 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
         // Client tamamen öldüyse (disconnect) hiçbir şey yapamayız → kapat
         if (!client.isReady?.()) {
           console.warn(`💀 [VoiceAFK] ${state.username} client bağlantısı yok — oturum kapatılıyor`);
-          stopVoiceAfk(userId, tokenIndex, { silent: true, reason: 'client-dead' });
+          stopVoiceAfk(userId, tokenIndex, { silent: true, reason: 'client-dead', guildId });
           return;
         }
 
@@ -200,7 +285,7 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
           // Sunucudan atılmış olabilir
           state.connectFails++;
           if (state.connectFails >= MAX_RECONNECT_FAILS) {
-            stopVoiceAfk(userId, tokenIndex, { silent: true, reason: 'guild-missing' });
+            stopVoiceAfk(userId, tokenIndex, { silent: true, reason: 'guild-missing', guildId });
           }
           return;
         }
@@ -229,7 +314,7 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
             console.warn(`⚠️ [VoiceAFK] yeniden bağlanma ${state.connectFails}/${MAX_RECONNECT_FAILS} başarısız`);
             if (state.connectFails >= MAX_RECONNECT_FAILS) {
               console.error(`🛑 [VoiceAFK] ${state.username} ${MAX_RECONNECT_FAILS} kez başarısız → oturum kapatıldı`);
-              stopVoiceAfk(userId, tokenIndex, { silent: true, reason: 'reconnect-failed' });
+              stopVoiceAfk(userId, tokenIndex, { silent: true, reason: 'reconnect-failed', guildId });
             } else {
               await sleep(BACKOFF[Math.min(state.connectFails - 1, BACKOFF.length - 1)]);
             }
@@ -247,7 +332,7 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
           }
         }
       } catch (err) {
-        console.error(`[VoiceAFK] sağlık kontrolü hatası (${key}):`, err.message);
+        console.error(`[VoiceAFK] sağlık kontrolü hatası (${sKey}):`, err.message);
       }
     }, HEALTH_CHECK_MS);
 
@@ -259,38 +344,67 @@ export async function startVoiceAfk(userId, tokenIndex, guildId, channelId, opts
 }
 
 // ── Durdur ───────────────────────────────────────────────────────────────
+/**
+ * Sesi durdur.
+ * @param {object} opts { silent, reason, guildId? , all? }
+ *   guildId → sadece o sunucudaki oturum
+ *   all     → hesabın tüm sunuculardaki oturumları
+ */
 export function stopVoiceAfk(userId, tokenIndex, opts = {}) {
-  const key = keyOf(userId, tokenIndex);
-  const state = runningSessions.get(key);
-  if (!state) {
+  const targets = opts.all || !opts.guildId
+    ? sessionsOf(userId, tokenIndex)
+    : [[sessionKeyOf(userId, tokenIndex, opts.guildId), runningSessions.get(sessionKeyOf(userId, tokenIndex, opts.guildId))]];
+
+  if (targets.length === 0 || targets.every(([, s]) => !s)) {
     if (opts.silent) return false;
     return { success: false, error: 'Bu hesap için Ses AFK çalışmıyor.' };
   }
 
-  state.running = false;
-  clearInterval(state.timer);
+  let stopped = 0;
+  for (const [sKey, state] of targets) {
+    if (!state) continue;
 
-  // 1) Ses bağlantısını kapat (kanaldan çık)
-  try { state.connection?.destroy(); } catch { }
-  state.connection = null;
+    state.running = false;
+    clearInterval(state.timer);
 
-  // 2) Havuzdan bırak — başka modül (Online vb.) kullanıyorsa client AÇIK kalır
-  release(userId, tokenIndex, MODULE);
+    // 1) Ses bağlantısını kapat (kanaldan çık)
+    try { state.connection?.destroy(); } catch { }
+    state.connection = null;
 
-  runningSessions.delete(key);
-  deleteSession(MODULE, userId, tokenIndex);
-  console.log(`🎙️ [VoiceAFK] Durduruldu: ${state.username || key} (${opts.reason || 'manual'})`);
-  return { success: true };
+    runningSessions.delete(sKey);
+    deleteSession(MODULE, userId, tokenIndex, state.guildId);
+    stopped++;
+    console.log(`🎙️ [VoiceAFK] Durduruldu: ${state.username || keyOf(userId, tokenIndex)} @ ${state.guildId} (${opts.reason || 'manual'})`);
+  }
+
+  // Hesabın başka sunucuda oturumu kalmadıysa havuz client'ını bırak
+  if (sessionsOf(userId, tokenIndex).length === 0) {
+    heldTokens.delete(keyOf(userId, tokenIndex));
+    release(userId, tokenIndex, MODULE);
+  }
+
+  return stopped > 0 ? { success: true, stopped } : false;
 }
 
 // ── Sorgular ─────────────────────────────────────────────────────────────
+/** Hesap herhangi bir sunucuda AFK mı? */
 export function isVoiceAfkRunning(userId, tokenIndex) {
-  return runningSessions.has(keyOf(userId, tokenIndex));
+  return sessionsOf(userId, tokenIndex).length > 0;
 }
 
-export function getVoiceAfkStats(userId, tokenIndex) {
-  const state = runningSessions.get(keyOf(userId, tokenIndex));
-  if (!state) return null;
+/**
+ * Canlı durum.
+ * Oturum çoklu olduğu için `guildId` verilmezse ilk oturum döner.
+ * Tüm oturumlar için `getAccountVoiceSessions()` kullanılır.
+ */
+export function getVoiceAfkStats(userId, tokenIndex, guildId = null) {
+  const entries = sessionsOf(userId, tokenIndex);
+  const picked = guildId
+    ? entries.find(([, s]) => s.guildId === guildId)
+    : entries[0];
+  if (!picked) return null;
+  const [, state] = picked;
+
   return {
     guildId: state.guildId,
     channelId: state.currentChannelId,
@@ -302,11 +416,30 @@ export function getVoiceAfkStats(userId, tokenIndex) {
     status: state.connection?.state?.status || 'none',
     lastError: state.lastError,
     durationMin: Math.floor((Date.now() - state.startTime) / 60000),
+    // Paneldeki "Mikrofon Kapat / Kulaklık Kapat" göstergesi için canlı durum
+    selfMute: state.selfMute !== false,
+    selfDeaf: state.selfDeaf !== false,
+    guildCount: entries.length,
     sharedWith: refsOf(userId, tokenIndex).filter(m => m !== MODULE),
   };
 }
 
-/** Kullanıcının tüm ses AFK oturumları */
+/** Bir hesabın tüm sunuculardaki oturumları (sunucu başına bir kayıt) */
+export function getAccountVoiceSessions(userId, tokenIndex) {
+  return sessionsOf(userId, tokenIndex).map(([, s]) => ({
+    guildId: s.guildId,
+    channelId: s.currentChannelId,
+    originalChannelId: s.channelId,
+    connected: s.connection?.state?.status === VoiceConnectionStatus.Ready,
+    status: s.connection?.state?.status || 'none',
+    reconnections: s.reconnections,
+    durationMin: Math.floor((Date.now() - s.startTime) / 60000),
+    selfMute: s.selfMute !== false,
+    selfDeaf: s.selfDeaf !== false,
+  }));
+}
+
+/** Kullanıcının tüm ses AFK oturumları (hesap + sunucu) */
 export function getUserVoiceAfkSessions(userId) {
   return [...runningSessions.entries()]
     .filter(([k]) => k.startsWith(`${userId}:`))
@@ -325,12 +458,12 @@ export function getAllVoiceAfkSessions() {
   return getAllSessions(MODULE);
 }
 
-/** Tümünü durdur */
+/** Tümünü durdur (hesabın tüm sunucuları) */
 export function stopAllVoiceAfk(userId) {
   let stopped = 0;
   for (const [k, s] of [...runningSessions.entries()]) {
     if (s.userId !== userId) continue;
-    if (stopVoiceAfk(s.userId, s.tokenIndex)) stopped++;
+    if (stopVoiceAfk(s.userId, s.tokenIndex, { all: true })) stopped++;
   }
   return stopped;
 }

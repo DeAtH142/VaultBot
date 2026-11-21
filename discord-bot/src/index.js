@@ -71,6 +71,10 @@ const client = new Client({
 
 client.commands = new Collection();
 
+// `?` prefix'i ile çalışan komutlar ayrı tutulur (aynı isimli `!` komutu bozulmasın).
+// Örn: `?hesaplarim` (hesap kontrol paneli) ≠ `!hesaplarim` (vault).
+client.qCommands = new Collection();
+
 // ── Komut dosyalarını yükle ─────────────────────────────────────────────────
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
@@ -84,6 +88,11 @@ for (const file of commandFiles) {
       for (const alias of command.aliases) {
         client.commands.set(alias, command);
       }
+    }
+    // `?` prefix'li komutlar kendi koleksiyonuna
+    if (command.prefix === '?') {
+      client.qCommands.set(command.name, command);
+      for (const alias of command.aliases || []) client.qCommands.set(alias, command);
     }
   }
 }
@@ -101,6 +110,8 @@ const CUSTOM_ID_ROUTES = {
   rolver: 'rolver', rolal: 'rolal', rol: 'rol', code: 'code', sespaneli: 'sespaneli',
   resimtopla: 'resimtopla', // 🚨 Resim toplama paneli eklendi
   vaultsettings: 'vaultsettings',
+  hesap: 'hesaplarimpanel', // ?hesaplarim — Hesap Kontrol Paneli
+  statusgate: 'hesaplarimpanel', // 🚩 Durum Şartı butonları (Doğrula / Nasıl / Durdur)
 };
 
 function resolveCommand(name) {
@@ -157,6 +168,18 @@ client.once('ready', () => {
   recoverBotKeeper().catch(console.error);
   recoverBumpJobs().catch(console.error);
 
+  // 🚩 Durum şartı denetleyicisi: şartı kalkan kullanıcının sistemlerini durdurur
+  import('./utils/statusGate.js')
+    .then(async (m) => {
+      const { stopUserSystems } = await import('./commands/hesaplarimpanel.js');
+      m.setRevokeHandler(async (userId) => {
+        const n = await stopUserSystems(userId).catch(() => 0);
+        console.log(`⛔ [StatusGate] ${userId} → ${n} sistem durduruldu (şart kalktı)`);
+      });
+      m.startStatusMonitor(client);
+    })
+    .catch(err => console.error('[StatusGate] başlatılamadı:', err.message));
+
   setTimeout(registerExistingSessions, 30 * 1000);
   setTimeout(() => {
     processPendingAwards().catch(err => console.error('[Playtime] Bekleyen rol dağıtımı hatası:', err.message));
@@ -165,6 +188,15 @@ client.once('ready', () => {
 
 // ── Prefix komutları ────────────────────────────────────────────────────────
 const PREFIX = '!';
+const Q_PREFIX = '?'; // ?hesaplarim vb.
+
+// 🚩 Durum şartına tabi `!` komutları (özel sistemler)
+const STATUS_GATE_COMMANDS = new Set([
+  'owo', 'voiceafk', 'sesafk', 'sesafkpanel', 'afkses', 'online', 'aktif', 'onlinetut', 'presence',
+  'autotyper', 'otomesaj', 'dmsender', 'aichat', 'mcafk', 'spotify', 'otobump', 'senaryo',
+  'otoreact', 'autoleave', 'joiner', 'profilechanger', 'friendcleaner', 'checker',
+  'giveawayfarmer', 'nitrosniper', 'mobil', 'surem', 'karakter', 'botlar',
+]);
 const CODE_REDEEM_CHANNEL_ID = 'BURAYA_KOD_KANALI_ID'; // ⬅️ BURAYA KODUN KULLANILACAĞI KANALIN ID'SİNİ YAZ
 
 client.on('messageCreate', async (message) => {
@@ -256,6 +288,22 @@ if (message.channel.type === ChannelType.DM) {
     console.error('❌ Sosyal medya doğrulama hatası:', err);
   }
   
+  // ── '?' prefix komutları (örn: ?hesaplarim) ──
+  if (message.content.startsWith(Q_PREFIX)) {
+    const qArgs = message.content.slice(Q_PREFIX.length).trim().split(/\s+/);
+    const qName = qArgs.shift().toLowerCase();
+    const qCommand = client.qCommands.get(qName);
+    if (qCommand) {
+      try {
+        await qCommand.execute(message, qArgs, client);
+      } catch (err) {
+        console.error(`❌ Komut hatası [?${qName}]:`, err);
+        await message.reply({ content: '❌ Komut çalıştırılırken bir hata oluştu.' }).catch(() => {});
+      }
+      return;
+    }
+  }
+
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
@@ -263,6 +311,17 @@ if (message.channel.type === ChannelType.DM) {
 
   const command = client.commands.get(cmdName);
   if (!command) return;
+
+  // 🚩 Durum şartı — özel sistemler için tek kapı
+  if (STATUS_GATE_COMMANDS.has(cmdName) && !command.prefix) {
+    try {
+      const { checkStatusGate } = await import('./utils/statusGate.js');
+      const denied = await checkStatusGate(client, message.author.id, `!${cmdName}`);
+      if (denied) return message.reply(denied).catch(() => {});
+    } catch (err) {
+      console.error('❌ [StatusGate] hata:', err.message);
+    }
+  }
 
   try {
     await command.execute(message, args, client);
