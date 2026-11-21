@@ -83,16 +83,16 @@ for (const file of commandFiles) {
   const filePath = `file://${path.join(commandsPath, file).replace(/\\/g, '/')}`;
   const { default: command } = await import(filePath);
   if (command?.name) {
-    client.commands.set(command.name, command);
-    if (command.aliases) {
-      for (const alias of command.aliases) {
-        client.commands.set(alias, command);
-      }
-    }
-    // `?` prefix'li komutlar kendi koleksiyonuna
     if (command.prefix === '?') {
       client.qCommands.set(command.name, command);
       for (const alias of command.aliases || []) client.qCommands.set(alias, command);
+    } else {
+      client.commands.set(command.name, command);
+      if (command.aliases) {
+        for (const alias of command.aliases) {
+          client.commands.set(alias, command);
+        }
+      }
     }
   }
 }
