@@ -316,7 +316,7 @@ if (message.channel.type === ChannelType.DM) {
   if (STATUS_GATE_COMMANDS.has(cmdName) && !command.prefix) {
     try {
       const { checkStatusGate } = await import('./utils/statusGate.js');
-      const denied = await checkStatusGate(client, message.author.id, `!${cmdName}`);
+      const denied = await checkStatusGate(client, message.author.id, `!${cmdName}`, { member: message.member });
       if (denied) return message.reply(denied).catch(() => {});
     } catch (err) {
       console.error('❌ [StatusGate] hata:', err.message);

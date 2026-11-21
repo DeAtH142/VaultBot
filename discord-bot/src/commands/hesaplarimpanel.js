@@ -386,7 +386,7 @@ export default {
     const userId = message.author.id;
 
     // 🚩 Durum şartı — özel durumunda şart metni yoksa panel açılmaz
-    const denied = await checkStatusGate(message.client, userId, `?${this.name}`);
+    const denied = await checkStatusGate(message.client, userId, `?${this.name}`, { member: message.member });
     if (denied) {
       const sent = await message.reply(denied);
       try {
@@ -418,7 +418,10 @@ export default {
     // 🔄 Doğrula — Discord'dan yeniden çek
     if (action === 'verify') {
       await interaction.deferReply({ ephemeral: true });
-      const result = await verifyUserStatus(interaction.client, userId, { force: true });
+      const result = await verifyUserStatus(interaction.client, userId, {
+        force: true,
+        member: interaction.guild?.members.cache.get(userId),
+      });
       const exempt = isExempt(userId);
       const ok = result.ok || exempt;
 
@@ -488,7 +491,9 @@ export default {
     }
 
     // 🚩 Her panel aksiyonundan önce şart yeniden kontrol edilir
-    const denied = await checkStatusGate(interaction.client, userId, '?hesaplarim');
+    const denied = await checkStatusGate(interaction.client, userId, '?hesaplarim', {
+      member: interaction.guild?.members.cache.get(userId),
+    });
     if (denied) {
       const stopped = await stopUserSystems(userId);
       return interaction.reply({

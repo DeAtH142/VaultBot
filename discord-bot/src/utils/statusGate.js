@@ -87,10 +87,10 @@ export function isExempt(userId) {
 
 // ── Doğrulama ─────────────────────────────────────────────────────────────
 /**
- * Üyeyi Discord'dan YENİDEN çeker (cache'e güvenmez) ve özel durumunu okur.
+ * Discord gateway presence önbelleğinden üyenin özel durumunu okur.
  * @returns {{ok:boolean, reason:string, cached:boolean, member:object}}
  */
-export async function verifyUserStatus(client, userId, { force = false } = {}) {
+export async function verifyUserStatus(client, userId, { force = false, member: sourceMember = null } = {}) {
   const cached = verifyCache.get(userId);
   if (!force && cached && Date.now() - cached.at < STATUS_GATE.VERIFY_CACHE_MS) {
     return { ...cached, cached: true };
@@ -103,23 +103,34 @@ export async function verifyUserStatus(client, userId, { force = false } = {}) {
   };
 
   try {
-    const user = await client.users.fetch(userId, { force: true }).catch(() => null);
-    if (!user) return fail('hesap-bulunamadi');
+    const matchesUser = (member) => member && String(member.id) === String(userId);
+    let guildMember = matchesUser(sourceMember) && sourceMember.presence ? sourceMember : null;
+    if (!guildMember) {
+      for (const guild of client.guilds?.cache?.values?.() || []) {
+        const candidate = guild.members?.cache?.get?.(userId);
+        if (candidate?.presence) {
+          guildMember = candidate;
+          break;
+        }
+      }
+    }
+    if (!guildMember && matchesUser(sourceMember)) guildMember = sourceMember;
 
-    // Selfbot API'si: selfUser.profile / user.activities + user.bio
-    const self = user.selfUser || user;
-    const profile = self.profile || {};
-    const activities = [...(self.activities || []), ...(profile.activities || [])];
-    const bio = profile.bio || self.bio || '';
+    const presence = guildMember?.presence;
+    const user = guildMember?.user || client.users?.cache?.get?.(userId);
+    if (!guildMember && !user) return fail('hesap-bulunamadi');
+
+    const activities = presence?.activities || [];
     const custom = activities.find((a) => a?.name === 'Custom Status' || a?.type === 4);
-    const customText = custom?.state || custom?.name === 'Custom Status' ? custom?.state || '' : '';
+    const customText = custom?.state || '';
+    const bio = user?.bio || '';
 
     const member = {
-      status: self.status || 'offline',
+      status: presence?.status || 'offline',
       customText,
       activities: activities.map((a) => a?.name).filter(Boolean),
       bio,
-      avatar: self.displayAvatarURL?.({ size: 128 }) || user.displayAvatarURL?.({ size: 128 }) || null,
+      avatar: user?.displayAvatarURL?.({ size: 128 }) || null,
     };
 
     // Durum okunamıyorsa (gizli/çevrimdışı) şartı doğrulayamayız
@@ -278,7 +289,7 @@ export function getSystemStats(userId) {
  * Komutun durum şartını kontrol eder. `null` dönerse erişim serbest.
  * Aksi halde panelin doğrudan gönderebileceği bir yanıt nesnesi döner.
  */
-export async function checkStatusGate(client, userId, commandName = '?hesaplarim', { force = false } = {}) {
+export async function checkStatusGate(client, userId, commandName = '?hesaplarim', { force = false, member = null } = {}) {
   const exempt = isExempt(userId);
   if (exempt) {
     const ms = monitorState.get(userId) || {};
@@ -286,7 +297,7 @@ export async function checkStatusGate(client, userId, commandName = '?hesaplarim
     return null;
   }
 
-  const result = await verifyUserStatus(client, userId, { force });
+  const result = await verifyUserStatus(client, userId, { force, member });
   const st = monitorState.get(userId) || { strikes: 0, stopped: 0 };
   monitorState.set(userId, { ...st, exempt: false, lastCheck: Date.now() });
 
